@@ -1,0 +1,45 @@
+[
+  {
+    "type": "github_trending",
+    "name": "GitHub Trending",
+    "enabled": true,
+    "source_type": "code_host",
+    "item_type": "repo",
+    "config": {
+      "source_type": "code_host",
+      "content_type": "repo",
+      "timeout": 15
+    }
+  },
+  {
+    "type": "hackernews",
+    "name": "HackerNews",
+    "enabled": false,
+    "source_type": "community",
+    "item_type": "article",
+    "config": {
+      "source_type": "community",
+      "content_type": "article",
+      "new_n": 100,
+      "min_score": 50,
+      "cutoff_hours": 36,
+      "fetch_workers": 5,
+      "skip_domains": ["twitter.com", "x.com", "medium.com", "zhihu.com"]
+    }
+  },
+  {
+    "type": "rss",
+    "name": "OpenAI Blog",
+    "enabled": false,
+    "source_type": "website",
+    "item_type": "article",
+    "config": {
+      "source_type": "website",
+      "content_type": "article",
+      "url": "https://openai.com/news/rss.xml",
+      "max_items": 10,
+      "source_tag": "openai_blog_rss",
+      "fetch_window_hours": 25
+    }
+  }
+]

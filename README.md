@@ -8,6 +8,47 @@ The current schema discussion lives in:
 
 - [docs/raw-items-output-schema.html](docs/raw-items-output-schema.html)
 
+## Migrated Scrapers
+
+The initial crawler engines were migrated from `ahaIndexSync` without moving the
+Supabase pipeline, LLM processing, ranking, enrichment, or public-site stages.
+
+Current engines:
+
+- `github_trending`
+- `github_search`
+- `hackernews`
+- `rss`
+- `twitter_twscrape`
+- `ai_blog`
+- `community_v2ex`
+- `community_linuxdo`
+- `reddit`
+- `huggingface`
+- `product_hunt`
+
+## Local Run
+
+Install dependencies:
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+pip install -r requirements.txt
+```
+
+Run enabled scrapers from the example config and print JSONL:
+
+```bash
+python main.py --config configs/scrapers.example.json --date 2026-06-06
+```
+
+Write JSONL to a file:
+
+```bash
+python main.py --config configs/scrapers.example.json --output outputs/raw_items.jsonl
+```
+
 ## Output Table
 
 The final output table intentionally ignores crawler internals such as retries,
