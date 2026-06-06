@@ -14,6 +14,7 @@ class RdsConfig:
     port: int = 3306
     charset: str = "utf8mb4"
     connect_timeout: int = 10
+    ssl_ca: str | None = None
 
     @classmethod
     def from_env(cls, prefix: str = "OCTOPUS_RDS_") -> RdsConfig:
@@ -31,6 +32,7 @@ class RdsConfig:
             database=_required("DATABASE"),
             charset=os.getenv(f"{prefix}CHARSET", "utf8mb4"),
             connect_timeout=int(os.getenv(f"{prefix}CONNECT_TIMEOUT", "10")),
+            ssl_ca=os.getenv(f"{prefix}SSL_CA") or None,
         )
 
 
@@ -52,6 +54,7 @@ class AliyunRdsDaoBase:
             except ImportError as exc:
                 raise RuntimeError("PyMySQL is required for Aliyun RDS writes") from exc
 
+            ssl_options = {"ca": self.config.ssl_ca} if self.config.ssl_ca else None
             self._conn = pymysql.connect(
                 host=self.config.host,
                 port=self.config.port,
@@ -60,6 +63,7 @@ class AliyunRdsDaoBase:
                 database=self.config.database,
                 charset=self.config.charset,
                 connect_timeout=self.config.connect_timeout,
+                ssl=ssl_options,
                 autocommit=False,
             )
         return self._conn

@@ -8,6 +8,7 @@ from typing import Any
 
 from dotenv import load_dotenv
 
+from infra.dao import OctopusDao, RawItemRecord
 from scrapers.registry import get_engine, list_types
 
 
@@ -81,9 +82,19 @@ def main() -> None:
         default="",
         help="Optional JSONL output path. Defaults to stdout.",
     )
+    parser.add_argument(
+        "--write-rds",
+        action="store_true",
+        help="Write crawler output to Aliyun RDS MySQL using OCTOPUS_RDS_* env vars.",
+    )
     args = parser.parse_args()
 
     rows = run_scrapers(_load_configs(Path(args.config)), args.date)
+
+    if args.write_rds:
+        records = [RawItemRecord.from_mapping(row) for row in rows]
+        with OctopusDao.from_env() as dao:
+            dao.raw_items.upsert_many(records)
 
     lines = [json.dumps(row, ensure_ascii=False, default=str) for row in rows]
     if args.output:

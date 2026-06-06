@@ -63,7 +63,13 @@ OCTOPUS_RDS_PORT=3306
 OCTOPUS_RDS_USER=
 OCTOPUS_RDS_PASSWORD=
 OCTOPUS_RDS_DATABASE=
+OCTOPUS_RDS_CHARSET=utf8mb4
+OCTOPUS_RDS_CONNECT_TIMEOUT=10
+OCTOPUS_RDS_SSL_CA=
 ```
+
+Use [.env.example](.env.example) as the local template. `OCTOPUS_RDS_SSL_CA` is
+optional and only needed when the RDS instance requires SSL verification.
 
 Example:
 
@@ -74,6 +80,12 @@ row = RawItemRecord.from_mapping(raw_item_output)
 
 with OctopusDao.from_env() as dao:
     dao.upsert_raw_item(row)
+```
+
+Run scrapers and write final output rows to RDS:
+
+```bash
+python main.py --config configs/scrapers.example.json --date 2026-06-06 --write-rds
 ```
 
 ## Output Table
