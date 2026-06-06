@@ -49,6 +49,33 @@ Write JSONL to a file:
 python main.py --config configs/scrapers.example.json --output outputs/raw_items.jsonl
 ```
 
+## DAO Layer
+
+Database writes live under `infra/dao/`. Callers should use `OctopusDao` as the
+single DAO entry point instead of importing table-specific DAO classes in
+business code.
+
+Aliyun RDS MySQL environment variables:
+
+```bash
+OCTOPUS_RDS_HOST=
+OCTOPUS_RDS_PORT=3306
+OCTOPUS_RDS_USER=
+OCTOPUS_RDS_PASSWORD=
+OCTOPUS_RDS_DATABASE=
+```
+
+Example:
+
+```python
+from infra.dao import OctopusDao, RawItemRecord
+
+row = RawItemRecord.from_mapping(raw_item_output)
+
+with OctopusDao.from_env() as dao:
+    dao.upsert_raw_item(row)
+```
+
 ## Output Table
 
 The final output table intentionally ignores crawler internals such as retries,
