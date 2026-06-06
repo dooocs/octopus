@@ -1,0 +1,624 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>八爪鱼 raw_items 最终输出表</title>
+  <style>
+    :root {
+      --bg: #f7f8f4;
+      --panel: #ffffff;
+      --ink: #17211d;
+      --muted: #66736e;
+      --line: #dce3dc;
+      --soft: #eef3ee;
+      --accent: #0f766e;
+      --accent-soft: #e6f6f3;
+      --warn: #9a5b13;
+      --warn-soft: #fff5df;
+      --drop: #8c3838;
+      --drop-soft: #fff0ef;
+      --keep: #276749;
+      --keep-soft: #e8f7ed;
+      --shadow: 0 18px 48px rgba(18, 30, 24, 0.08);
+      --sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: linear-gradient(180deg, #fbfcf8 0%, var(--bg) 55%, #f0f3ee 100%);
+      font-family: var(--sans);
+      line-height: 1.55;
+    }
+
+    main {
+      width: min(1260px, calc(100% - 40px));
+      margin: 0 auto;
+      padding: 44px 0 72px;
+    }
+
+    header {
+      display: grid;
+      grid-template-columns: minmax(0, 1.25fr) minmax(300px, 0.75fr);
+      gap: 28px;
+      align-items: end;
+      margin-bottom: 24px;
+    }
+
+    .eyebrow {
+      margin: 0 0 10px;
+      color: var(--accent);
+      font-size: 13px;
+      font-weight: 800;
+      letter-spacing: 0;
+      text-transform: uppercase;
+    }
+
+    h1 {
+      margin: 0;
+      max-width: 900px;
+      font-size: clamp(32px, 4.6vw, 56px);
+      line-height: 1.06;
+      letter-spacing: 0;
+    }
+
+    h2,
+    h3 {
+      letter-spacing: 0;
+    }
+
+    .lead {
+      max-width: 920px;
+      margin: 18px 0 0;
+      color: var(--muted);
+      font-size: 18px;
+    }
+
+    code {
+      font-family: var(--mono);
+      font-size: 0.92em;
+      color: #18251f;
+      background: #f1f4f1;
+      border: 1px solid #e2e8e2;
+      border-radius: 6px;
+      padding: 0.12em 0.34em;
+    }
+
+    .card,
+    .panel,
+    .table-wrap {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+    }
+
+    .card {
+      padding: 18px;
+    }
+
+    .card h2,
+    .panel h2 {
+      margin: 0 0 10px;
+      font-size: 20px;
+    }
+
+    .card p,
+    .panel p {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+      margin: 20px 0 24px;
+    }
+
+    .panel {
+      margin-top: 18px;
+      padding: 22px;
+    }
+
+    .rule-list {
+      display: grid;
+      gap: 10px;
+      margin: 14px 0 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .rule-list li {
+      display: grid;
+      grid-template-columns: 120px minmax(0, 1fr);
+      gap: 12px;
+      padding: 12px 14px;
+      background: var(--soft);
+      border-radius: 8px;
+      color: var(--muted);
+    }
+
+    .rule-list strong {
+      color: var(--ink);
+    }
+
+    .table-wrap {
+      margin-top: 18px;
+      overflow: hidden;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    th,
+    td {
+      padding: 13px 14px;
+      border-bottom: 1px solid var(--soft);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      color: #33423c;
+      background: #f3f6f1;
+      font-size: 12px;
+      text-transform: uppercase;
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .group-row td {
+      color: var(--accent);
+      background: var(--accent-soft);
+      font-weight: 800;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .required {
+      color: var(--keep);
+      background: var(--keep-soft);
+    }
+
+    .optional {
+      color: var(--warn);
+      background: var(--warn-soft);
+    }
+
+    .drop {
+      color: var(--drop);
+      background: var(--drop-soft);
+    }
+
+    pre {
+      margin: 14px 0 0;
+      padding: 16px;
+      overflow: auto;
+      color: #18312a;
+      background: #f3f6f1;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      font-family: var(--mono);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .source-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 14px;
+    }
+
+    .source-card {
+      padding: 14px;
+      background: #fbfcfa;
+      border: 1px solid var(--soft);
+      border-radius: 8px;
+    }
+
+    .source-card h3 {
+      margin: 0 0 8px;
+      font-size: 16px;
+    }
+
+    .source-card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    @media (max-width: 860px) {
+      main {
+        width: min(100% - 24px, 1260px);
+        padding-top: 28px;
+      }
+
+      header,
+      .grid,
+      .source-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .rule-list li {
+        grid-template-columns: 1fr;
+      }
+
+      table,
+      thead,
+      tbody,
+      th,
+      td,
+      tr {
+        display: block;
+      }
+
+      thead {
+        display: none;
+      }
+
+      tr {
+        border-bottom: 1px solid var(--soft);
+      }
+
+      td {
+        display: grid;
+        grid-template-columns: 120px minmax(0, 1fr);
+        gap: 10px;
+        border-bottom: 0;
+      }
+
+      td::before {
+        content: attr(data-label);
+        color: var(--muted);
+        font-weight: 700;
+      }
+
+      .group-row td {
+        display: block;
+      }
+
+      .group-row td::before {
+        content: "";
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <p class="eyebrow">Octopus Crawler Contract</p>
+        <h1>八爪鱼最终输出表：<code>raw_items</code></h1>
+        <p class="lead">
+          这张表只表达“抓到了什么内容”。运行过程、请求日志、失败重试、入口 URL、调试 payload 都不进入最终输出表，避免把爬虫内部复杂度转嫁给下游消费方。
+        </p>
+      </div>
+      <section class="card">
+        <h2>设计结论</h2>
+        <p>
+          保留 16 个字段。<code>content</code> 保存主内容，<code>context_content</code> 保存主内容之外的结构化上下文；来源差异统一落到 <code>metrics</code> 与 <code>extra</code>。
+        </p>
+      </section>
+    </header>
+
+    <section class="grid" aria-label="schema principles">
+      <div class="card">
+        <h2>最小输出</h2>
+        <p>下游只需要知道 item 身份、来源、时间、内容和少量扩展，不需要知道 crawler 怎么抓。</p>
+      </div>
+      <div class="card">
+        <h2>内容入表</h2>
+        <p><code>content</code> 是最终输出的一部分。评论、引用、thread、README 等上下文进入 <code>context_content</code>。</p>
+      </div>
+      <div class="card">
+        <h2>JSON 收口</h2>
+        <p>不同来源的指标和补充字段变化很快，用 <code>metrics</code> / <code>extra</code> 承接，稳定字段保持少而清楚。</p>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>字段取舍规则</h2>
+      <ul class="rule-list">
+        <li><strong>保留</strong><span>下游几乎每次消费都需要，或者决定去重、排序、展示、追溯。</span></li>
+        <li><strong>合并</strong><span>语义接近但不稳定的字段进入 <code>metrics</code> 或 <code>extra</code>，例如 stars、likes、feed_url、repo topics。</span></li>
+        <li><strong>删除</strong><span>只服务抓取过程的字段不进最终表，例如 fetch_status、fetch_error、raw_payload、canonical_url、run_id。</span></li>
+      </ul>
+    </section>
+
+    <section class="panel">
+      <h2>最终字段表</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>分组</th>
+              <th>字段</th>
+              <th>MySQL 类型</th>
+              <th>必填</th>
+              <th>说明</th>
+              <th>例子</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="group-row"><td colspan="6">他是谁</td></tr>
+            <tr>
+              <td data-label="分组">身份</td>
+              <td data-label="字段"><code>id</code></td>
+              <td data-label="MySQL 类型"><code>CHAR(32)</code></td>
+              <td data-label="必填"><span class="tag required">required</span></td>
+              <td data-label="说明">全局唯一 ID。建议由 <code>source_type + sub_source_type + url</code> 或来源原生 ID 计算 MD5。</td>
+              <td data-label="例子"><code>md5(...)</code></td>
+            </tr>
+            <tr>
+              <td data-label="分组">身份</td>
+              <td data-label="字段"><code>url</code></td>
+              <td data-label="MySQL 类型"><code>TEXT</code></td>
+              <td data-label="必填"><span class="tag required">required</span></td>
+              <td data-label="说明">这条内容本身的 URL，不是列表页、feed URL 或抓取入口 URL。</td>
+              <td data-label="例子"><code>https://github.com/openai/codex</code></td>
+            </tr>
+
+            <tr class="group-row"><td colspan="6">从哪里来</td></tr>
+            <tr>
+              <td data-label="分组">来源</td>
+              <td data-label="字段"><code>source_type</code></td>
+              <td data-label="MySQL 类型"><code>VARCHAR(64)</code></td>
+              <td data-label="必填"><span class="tag required">required</span></td>
+              <td data-label="说明">来源大类，保持少量枚举。</td>
+              <td data-label="例子"><code>code_host</code>, <code>social</code>, <code>community</code>, <code>website</code></td>
+            </tr>
+            <tr>
+              <td data-label="分组">来源</td>
+              <td data-label="字段"><code>sub_source_type</code></td>
+              <td data-label="MySQL 类型"><code>VARCHAR(128)</code></td>
+              <td data-label="必填"><span class="tag required">required</span></td>
+              <td data-label="说明">具体来源或采集通道。它承担原来 <code>source_key</code> 的作用，所以不再另设字段。</td>
+              <td data-label="例子"><code>github_trending</code>, <code>hackernews</code>, <code>openai_blog_rss</code></td>
+            </tr>
+            <tr>
+              <td data-label="分组">来源</td>
+              <td data-label="字段"><code>item_type</code></td>
+              <td data-label="MySQL 类型"><code>VARCHAR(64)</code></td>
+              <td data-label="必填"><span class="tag required">required</span></td>
+              <td data-label="说明">内容对象类型，而不是来源类型。</td>
+              <td data-label="例子"><code>repo</code>, <code>article</code>, <code>post</code>, <code>tweet</code>, <code>paper</code></td>
+            </tr>
+            <tr>
+              <td data-label="分组">来源</td>
+              <td data-label="字段"><code>author_id</code></td>
+              <td data-label="MySQL 类型"><code>VARCHAR(255)</code></td>
+              <td data-label="必填"><span class="tag optional">optional</span></td>
+              <td data-label="说明">来源侧作者稳定 ID。没有稳定 ID 时可为空。</td>
+              <td data-label="例子"><code>karpathy</code>, <code>openai</code>, <code>pg</code></td>
+            </tr>
+            <tr>
+              <td data-label="分组">来源</td>
+              <td data-label="字段"><code>author_url</code></td>
+              <td data-label="MySQL 类型"><code>TEXT</code></td>
+              <td data-label="必填"><span class="tag optional">optional</span></td>
+              <td data-label="说明">作者主页 URL。作者名如果需要展示，优先放 <code>extra.author_name</code>，避免主表继续扩张。</td>
+              <td data-label="例子"><code>https://x.com/karpathy</code></td>
+            </tr>
+
+            <tr class="group-row"><td colspan="6">何时</td></tr>
+            <tr>
+              <td data-label="分组">时间</td>
+              <td data-label="字段"><code>created_date</code></td>
+              <td data-label="MySQL 类型"><code>DATETIME(3)</code></td>
+              <td data-label="必填"><span class="tag required">required</span></td>
+              <td data-label="说明">八爪鱼首次写入这条 item 的时间。系统时间，UTC。</td>
+              <td data-label="例子"><code>2026-06-06 10:15:00.000</code></td>
+            </tr>
+            <tr>
+              <td data-label="分组">时间</td>
+              <td data-label="字段"><code>updated_date</code></td>
+              <td data-label="MySQL 类型"><code>DATETIME(3)</code></td>
+              <td data-label="必填"><span class="tag required">required</span></td>
+              <td data-label="说明">八爪鱼最后一次更新这条 item 的时间。系统时间，UTC。</td>
+              <td data-label="例子"><code>2026-06-06 10:15:00.000</code></td>
+            </tr>
+            <tr>
+              <td data-label="分组">时间</td>
+              <td data-label="字段"><code>source_published_date</code></td>
+              <td data-label="MySQL 类型"><code>DATETIME(3)</code></td>
+              <td data-label="必填"><span class="tag optional">optional</span></td>
+              <td data-label="说明">来源发布时间。RSS、X、HN、Product Hunt 通常有；GitHub Trending 可能没有。</td>
+              <td data-label="例子"><code>2026-06-06 01:30:00.000</code></td>
+            </tr>
+            <tr>
+              <td data-label="分组">时间</td>
+              <td data-label="字段"><code>snapshot_date</code></td>
+              <td data-label="MySQL 类型"><code>DATE</code></td>
+              <td data-label="必填"><span class="tag required">required</span></td>
+              <td data-label="说明">业务归属日期。用于日报、批次消费、重跑和分区。</td>
+              <td data-label="例子"><code>2026-06-06</code></td>
+            </tr>
+
+            <tr class="group-row"><td colspan="6">是什么</td></tr>
+            <tr>
+              <td data-label="分组">内容</td>
+              <td data-label="字段"><code>title</code></td>
+              <td data-label="MySQL 类型"><code>TEXT</code></td>
+              <td data-label="必填"><span class="tag required">required</span></td>
+              <td data-label="说明">来源标题。没有标题的短文本内容，可以用正文前 100 字生成。</td>
+              <td data-label="例子"><code>OpenAI announces...</code></td>
+            </tr>
+            <tr>
+              <td data-label="分组">内容</td>
+              <td data-label="字段"><code>metrics</code></td>
+              <td data-label="MySQL 类型"><code>JSON</code></td>
+              <td data-label="必填"><span class="tag optional">optional</span></td>
+              <td data-label="说明">来源原生指标。字段随来源变化，下游按需解析。</td>
+              <td data-label="例子"><code>{"stars":1200,"comments":42}</code></td>
+            </tr>
+            <tr>
+              <td data-label="分组">内容</td>
+              <td data-label="字段"><code>content</code></td>
+              <td data-label="MySQL 类型"><code>MEDIUMTEXT</code></td>
+              <td data-label="必填"><span class="tag optional">optional</span></td>
+              <td data-label="说明">这条 item 的主内容。下游默认索引、摘要、向量化时优先消费它。允许为空。</td>
+              <td data-label="例子">article body, tweet text, README text</td>
+            </tr>
+            <tr>
+              <td data-label="分组">内容</td>
+              <td data-label="字段"><code>context_content</code></td>
+              <td data-label="MySQL 类型"><code>JSON</code></td>
+              <td data-label="必填"><span class="tag optional">optional</span></td>
+              <td data-label="说明">主内容之外的上下文内容，如摘要、评论、引用、thread、讨论页、README、官网信息等。</td>
+              <td data-label="例子"><code>{"summary":"...","top_comments":[...]}</code></td>
+            </tr>
+            <tr>
+              <td data-label="分组">内容</td>
+              <td data-label="字段"><code>extra</code></td>
+              <td data-label="MySQL 类型"><code>JSON</code></td>
+              <td data-label="必填"><span class="tag optional">optional</span></td>
+              <td data-label="说明">少量来源特定字段，如 <code>tweet_id</code>、<code>hn_id</code>、<code>feed_url</code>、<code>topics</code>、<code>website</code>。</td>
+              <td data-label="例子"><code>{"hn_id":123,"feed_url":"..."}</code></td>
+            </tr>
+            <tr>
+              <td data-label="分组">内容</td>
+              <td data-label="字段"><code>scrape_config_snapshot</code></td>
+              <td data-label="MySQL 类型"><code>JSON</code></td>
+              <td data-label="必填"><span class="tag optional">optional</span></td>
+              <td data-label="说明">抓取时的配置快照。保留它是为了追溯“当时为什么抓到了这条”。</td>
+              <td data-label="例子"><code>{"query":"stars:&gt;100 topic:ai"}</code></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>建议 MySQL DDL</h2>
+      <pre><code>CREATE TABLE raw_items (
+  id CHAR(32) NOT NULL COMMENT '全局唯一 ID',
+  url TEXT NOT NULL COMMENT '内容本身 URL',
+
+  source_type VARCHAR(64) NOT NULL COMMENT '来源大类',
+  sub_source_type VARCHAR(128) NOT NULL COMMENT '具体来源或采集通道',
+  item_type VARCHAR(64) NOT NULL COMMENT '内容对象类型',
+  author_id VARCHAR(255) NULL COMMENT '来源侧作者稳定 ID',
+  author_url TEXT NULL COMMENT '作者主页 URL',
+
+  created_date DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) COMMENT '首次写入时间 UTC',
+  updated_date DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3)
+    ON UPDATE CURRENT_TIMESTAMP(3) COMMENT '最后更新时间 UTC',
+  source_published_date DATETIME(3) NULL COMMENT '来源发布时间 UTC',
+  snapshot_date DATE NOT NULL COMMENT '业务归属日期',
+
+  title TEXT NOT NULL COMMENT '标题',
+  metrics JSON NULL COMMENT '来源原生指标',
+  content MEDIUMTEXT NULL COMMENT '主内容，下游默认消费文本',
+  context_content JSON NULL COMMENT '主内容之外的上下文内容',
+  extra JSON NULL COMMENT '来源特定扩展字段',
+  scrape_config_snapshot JSON NULL COMMENT '抓取配置快照',
+
+  PRIMARY KEY (id),
+  KEY idx_snapshot_date (snapshot_date),
+  KEY idx_source_snapshot (source_type, sub_source_type, snapshot_date),
+  KEY idx_item_type_snapshot (item_type, snapshot_date),
+  KEY idx_source_published_date (source_published_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;</code></pre>
+    </section>
+
+    <section class="panel">
+      <h2>现有来源套用</h2>
+      <div class="source-grid">
+        <article class="source-card">
+          <h3>GitHub Trending / Search</h3>
+          <p><code>source_type=code_host</code>, <code>sub_source_type=github_trending/github_search</code>, <code>item_type=repo</code>。<code>content</code> 放 README 主文本，<code>context_content</code> 放 description、topics、图片等上下文。</p>
+        </article>
+        <article class="source-card">
+          <h3>HackerNews</h3>
+          <p><code>source_type=community</code>, <code>sub_source_type=hackernews</code>, <code>item_type=article</code>。外链正文放 <code>content</code>，高赞评论和讨论页放 <code>context_content</code>。</p>
+        </article>
+        <article class="source-card">
+          <h3>X / Twitter</h3>
+          <p><code>source_type=social</code>, <code>sub_source_type=x_timeline/x_search</code>, <code>item_type=tweet</code>。推文文本放 <code>content</code>，引用推文和 thread 放 <code>context_content</code>。</p>
+        </article>
+        <article class="source-card">
+          <h3>RSS / 官方博客</h3>
+          <p><code>source_type=website</code>, <code>sub_source_type=rss/html_blog</code>, <code>item_type=article</code>。正文放 <code>content</code>，RSS 摘要、feed URL、原始 guid 放 <code>context_content</code> 或 <code>extra</code>。</p>
+        </article>
+        <article class="source-card">
+          <h3>Product Hunt</h3>
+          <p><code>source_type=product_platform</code>, <code>sub_source_type=product_hunt</code>, <code>item_type=product</code>。产品介绍放 <code>content</code>，tagline、makers、官网、topics 放 <code>context_content</code>。</p>
+        </article>
+        <article class="source-card">
+          <h3>V2EX / LINUX DO / Reddit</h3>
+          <p><code>source_type=community</code>, <code>sub_source_type</code> 区分平台，<code>item_type=post</code>。帖子正文放 <code>content</code>，精选回复和楼层摘要放 <code>context_content</code>。</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>明确不进最终表</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>字段</th>
+              <th>结论</th>
+              <th>原因</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td data-label="字段"><code>canonical_url</code></td>
+              <td data-label="结论"><span class="tag drop">drop</span></td>
+              <td data-label="原因">对去重有用，但会让下游同时面对两个 URL。先由八爪鱼内部决定 <code>id</code> 和 <code>url</code>。</td>
+            </tr>
+            <tr>
+              <td data-label="字段"><code>source_item_id</code></td>
+              <td data-label="结论"><span class="tag drop">merge</span></td>
+              <td data-label="原因">不是所有来源都有稳定 ID。有的话放 <code>extra</code>，例如 <code>tweet_id</code>、<code>hn_id</code>、<code>repo_full_name</code>。</td>
+            </tr>
+            <tr>
+              <td data-label="字段"><code>author_name</code></td>
+              <td data-label="结论"><span class="tag drop">merge</span></td>
+              <td data-label="原因">展示需要但不是核心 contract。需要时放 <code>extra.author_name</code>。</td>
+            </tr>
+            <tr>
+              <td data-label="字段"><code>fetch_status</code> / <code>fetch_error</code></td>
+              <td data-label="结论"><span class="tag drop">drop</span></td>
+              <td data-label="原因">最终输出表只存成功产物，失败和重试属于中间过程。</td>
+            </tr>
+            <tr>
+              <td data-label="字段"><code>raw_payload</code></td>
+              <td data-label="结论"><span class="tag drop">drop</span></td>
+              <td data-label="原因">体积和结构不可控。调试需要时放日志、对象存储或内部中间表。</td>
+            </tr>
+            <tr>
+              <td data-label="字段"><code>source_updated_date</code></td>
+              <td data-label="结论"><span class="tag drop">merge</span></td>
+              <td data-label="原因">多数来源没有。少数来源如 GitHub repo updated_at 可放 <code>extra.source_updated_date</code>。</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
