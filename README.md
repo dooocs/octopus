@@ -34,7 +34,7 @@ Install dependencies:
 ```bash
 python3 -m venv .venv
 . .venv/bin/activate
-pip install -r requirements.txt
+pip install .
 ```
 
 Run enabled scrapers from the example config and print JSONL:
@@ -91,6 +91,8 @@ python main.py --config configs/scrapers.example.json --date 2026-06-06 --write-
 There is also a manual GitHub Action named `aliyun_rds_test`. It does not run
 real crawlers. It upserts one deterministic smoke-test row into `raw_items` so
 you can validate RDS connectivity, credentials, table structure, and DAO writes.
+The workflow calls the installed console script `octopus-aliyun-rds-test`, so it
+does not depend on ad hoc `PYTHONPATH` settings.
 
 ## Output Table
 

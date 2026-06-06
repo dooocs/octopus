@@ -27,7 +27,7 @@ jobs:
           cache: pip
 
       - name: Install dependencies
-        run: python -m pip install -r requirements.txt
+        run: python -m pip install .
 
       - name: Insert raw_items smoke row
-        run: python scripts/aliyun_rds_test_insert.py
+        run: octopus-aliyun-rds-test
