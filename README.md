@@ -88,6 +88,10 @@ Run scrapers and write final output rows to RDS:
 python main.py --config configs/scrapers.example.json --date 2026-06-06 --write-rds
 ```
 
+There is also a manual GitHub Action named `aliyun_rds_test`. It does not run
+real crawlers. It upserts one deterministic smoke-test row into `raw_items` so
+you can validate RDS connectivity, credentials, table structure, and DAO writes.
+
 ## Output Table
 
 The final output table intentionally ignores crawler internals such as retries,

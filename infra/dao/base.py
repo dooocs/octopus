@@ -26,12 +26,12 @@ class RdsConfig:
 
         return cls(
             host=_required("HOST"),
-            port=int(os.getenv(f"{prefix}PORT", "3306")),
+            port=int(os.getenv(f"{prefix}PORT") or "3306"),
             user=_required("USER"),
             password=_required("PASSWORD"),
             database=_required("DATABASE"),
-            charset=os.getenv(f"{prefix}CHARSET", "utf8mb4"),
-            connect_timeout=int(os.getenv(f"{prefix}CONNECT_TIMEOUT", "10")),
+            charset=os.getenv(f"{prefix}CHARSET") or "utf8mb4",
+            connect_timeout=int(os.getenv(f"{prefix}CONNECT_TIMEOUT") or "10"),
             ssl_ca=os.getenv(f"{prefix}SSL_CA") or None,
         )
 
