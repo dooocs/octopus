@@ -23,6 +23,7 @@ dependencies = [
 [project.scripts]
 octopus = "main:main"
 octopus-aliyun-rds-test = "scripts.aliyun_rds_test_insert:main"
+octopus-global-scrape = "scripts.global_scrape:main"
 
 [tool.setuptools]
 py-modules = ["main"]

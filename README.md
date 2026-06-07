@@ -110,10 +110,9 @@ put a Supabase service-role key in this frontend.
 
 Supabase does not need a separate install step for this web app. Make sure the
 GitHub Auth provider is enabled, the Auth redirect URL allow list includes the
-Vercel domain and `http://localhost:5173`, and `scraper_configs` remains exposed
-with RLS policies that restrict reads/writes to the single allowed user. The
-RLS template is in
-[`web/docs/supabase-scraper-configs-rls.sql`](web/docs/supabase-scraper-configs-rls.sql).
+Vercel domain and `http://localhost:5173`, and the Octopus admin tables
+`octp_item_types`, `octp_scraper_configs`, and `octp_scraper_logs` remain
+exposed with RLS policies that restrict reads/writes to the single allowed user.
 
 Local development:
 
@@ -130,18 +129,56 @@ cd web
 npm run build
 ```
 
-The first screen shows all supported crawler channels on the left and the
-currently enabled rows from `scraper_configs` on the right. Creating or editing
-rows writes to the existing Supabase `scraper_configs` table. The Python runner
-still supports local JSON config files through `--config`; wiring scheduled
-crawler runs directly to remote managed configs should be done in a trusted
-server or pipeline layer rather than from the public Vercel frontend.
+The first screen groups all scraper configs by `item_type` on the left and shows
+the selected rows from `octp_scraper_configs` on the right. Creating or editing
+rows writes to the Supabase `octp_scraper_configs` table. The Python runner still
+supports local JSON config files through `--config`; managed all-source runs use
+the trusted GitHub Action described below.
 
 There is also a manual GitHub Action named `aliyun_rds_test`. It does not run
 real crawlers. It upserts one deterministic smoke-test row into `raw_items` so
 you can validate RDS connectivity, credentials, table structure, and DAO writes.
 The workflow calls the installed console script `octopus-aliyun-rds-test`, so it
 does not depend on ad hoc `PYTHONPATH` settings.
+
+## Global Scrape Action
+
+The manual GitHub Action `Global Scrape` reads enabled rows from Supabase
+`octp_scraper_configs`, writes one row per scraper execution into
+`octp_scraper_logs`, runs the supported Octopus scraper engines, and can upsert
+the resulting rows into the Aliyun RDS `raw_items` table.
+
+Required GitHub secrets:
+
+```bash
+SUPABASE_URL=
+SUPABASE_SERVICE_ROLE_KEY=
+OCTOPUS_RDS_HOST=
+OCTOPUS_RDS_PORT=3306
+OCTOPUS_RDS_USER=
+OCTOPUS_RDS_PASSWORD=
+OCTOPUS_RDS_DATABASE=
+OCTOPUS_RDS_CHARSET=utf8mb4
+OCTOPUS_RDS_CONNECT_TIMEOUT=10
+OCTOPUS_RDS_SSL_CA=
+```
+
+Provider secrets reused from `ahaIndexSync` where applicable:
+
+```bash
+GH_MODELS_TOKEN=
+KIMI_API_KEY=
+OSS_ACCESS_KEY_ID=
+OSS_ACCESS_KEY_SECRET=
+TWITTERAPI_IO_KEY=
+PRODUCTHUNT_TOKEN=
+```
+
+Manual local equivalent:
+
+```bash
+python -m scripts.global_scrape --continue-on-error --write-rds
+```
 
 ## Output Table
 

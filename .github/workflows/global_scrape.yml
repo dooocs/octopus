@@ -1,0 +1,83 @@
+name: Global Scrape
+
+on:
+  workflow_dispatch:
+    inputs:
+      snapshot_date:
+        description: "Snapshot date, e.g. 2026-06-07. Empty means today."
+        required: false
+        default: ""
+      write_rds:
+        description: "Write fetched rows to Aliyun RDS raw_items."
+        required: false
+        type: boolean
+        default: true
+      fail_on_error:
+        description: "Fail the workflow after all configs finish if any scraper failed."
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    env:
+      TZ: Asia/Shanghai
+
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+      OCTOPUS_RDS_HOST: ${{ secrets.OCTOPUS_RDS_HOST }}
+      OCTOPUS_RDS_PORT: ${{ secrets.OCTOPUS_RDS_PORT }}
+      OCTOPUS_RDS_USER: ${{ secrets.OCTOPUS_RDS_USER }}
+      OCTOPUS_RDS_PASSWORD: ${{ secrets.OCTOPUS_RDS_PASSWORD }}
+      OCTOPUS_RDS_DATABASE: ${{ secrets.OCTOPUS_RDS_DATABASE }}
+      OCTOPUS_RDS_CHARSET: ${{ secrets.OCTOPUS_RDS_CHARSET }}
+      OCTOPUS_RDS_CONNECT_TIMEOUT: ${{ secrets.OCTOPUS_RDS_CONNECT_TIMEOUT }}
+      OCTOPUS_RDS_SSL_CA: ${{ secrets.OCTOPUS_RDS_SSL_CA }}
+
+      GH_MODELS_TOKEN: ${{ secrets.GH_MODELS_TOKEN }}
+      KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
+      OSS_ACCESS_KEY_ID: ${{ secrets.OSS_ACCESS_KEY_ID }}
+      OSS_ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
+      TWITTERAPI_IO_KEY: ${{ secrets.TWITTERAPI_IO_KEY }}
+      PRODUCTHUNT_TOKEN: ${{ secrets.PRODUCTHUNT_TOKEN }}
+
+      SNAPSHOT_DATE: ${{ inputs.snapshot_date }}
+      WRITE_RDS: ${{ inputs.write_rds }}
+      FAIL_ON_ERROR: ${{ inputs.fail_on_error }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: python -m pip install .
+
+      - name: Run global scrape
+        run: |
+          ARGS=(--continue-on-error --output outputs/global_scrape/raw_items.jsonl)
+          if [ -n "$SNAPSHOT_DATE" ]; then
+            ARGS+=(--date "$SNAPSHOT_DATE")
+          fi
+          if [ "$WRITE_RDS" = "true" ]; then
+            ARGS+=(--write-rds)
+          fi
+          if [ "$FAIL_ON_ERROR" = "true" ]; then
+            ARGS+=(--fail-on-error)
+          fi
+          python -m scripts.global_scrape "${ARGS[@]}"
+
+      - name: Upload raw_items JSONL artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: global-scrape-raw-items
+          path: outputs/global_scrape/raw_items.jsonl
+          if-no-files-found: ignore
