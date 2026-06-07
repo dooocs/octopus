@@ -11,7 +11,7 @@ from typing import Any
 from dotenv import load_dotenv
 
 from infra.dao import OctopusDao, RawItemRecord
-from main import run_scrapers
+from infra.scraper_runner import run_scrapers
 from scrapers.registry import list_types
 from scripts.octp_supabase import (
     SupabaseRestClient,
