@@ -64,12 +64,26 @@ function rowToRuntimeConfig(row: ScraperConfigRow) {
   }
 }
 
-function countEnabled(configs: ScraperConfigRow[], scraper: string) {
-  return configs.filter((config) => config.scraper === scraper && config.enabled).length
+function countEnabledByScraper(configs: ScraperConfigRow[], scraper: string, itemType: string) {
+  return configs.filter(
+    (config) => config.scraper === scraper && config.item_type === itemType && config.enabled
+  ).length
+}
+
+function countByScraper(configs: ScraperConfigRow[], scraper: string, itemType: string) {
+  return configs.filter((config) => config.scraper === scraper && config.item_type === itemType).length
+}
+
+function countEnabledByItemType(configs: ScraperConfigRow[], itemType: string) {
+  return configs.filter((config) => config.item_type === itemType && config.enabled).length
+}
+
+function countByItemType(configs: ScraperConfigRow[], itemType: string) {
+  return configs.filter((config) => config.item_type === itemType).length
 }
 
 function getDefaultCollapsedGroups() {
-  return new Set(scraperChannels.map((channel) => channel.group))
+  return new Set(scraperChannels.map((channel) => channel.itemType))
 }
 
 function titleizeScraper(scraper: string) {
@@ -145,11 +159,11 @@ export default function ScraperDashboard({ authUser, onLogout }: ScraperDashboar
   const channelsByGroup = useMemo(() => {
     const groups = new Map<string, ScraperChannel[]>()
     for (const channel of allChannels) {
-      const items = groups.get(channel.group) || []
+      const items = groups.get(channel.itemType) || []
       items.push(channel)
-      groups.set(channel.group, items)
+      groups.set(channel.itemType, items)
     }
-    return Array.from(groups.entries())
+    return Array.from(groups.entries()).sort(([left], [right]) => left.localeCompare(right))
   }, [allChannels])
 
   const visibleEnabledConfigs = useMemo(() => {
@@ -267,37 +281,31 @@ export default function ScraperDashboard({ authUser, onLogout }: ScraperDashboar
         </nav>
 
         <div className="channel-list">
-          {channelsByGroup.map(([group, channels]) => (
-            <section className="channel-group" key={group}>
+          {channelsByGroup.map(([itemType, channels]) => (
+            <section className="channel-group" key={itemType}>
               <button
                 type="button"
                 className="group-toggle"
-                aria-expanded={!collapsedGroups.has(group)}
-                onClick={() => toggleGroup(group)}
+                aria-expanded={!collapsedGroups.has(itemType)}
+                onClick={() => toggleGroup(itemType)}
               >
                 <span>
-                  {collapsedGroups.has(group) ? (
+                  {collapsedGroups.has(itemType) ? (
                     <ChevronRight size={14} aria-hidden="true" />
                   ) : (
                     <ChevronDown size={14} aria-hidden="true" />
                   )}
-                  {group}
+                  {itemType.toUpperCase()}
                 </span>
                 <em>
-                  {channels.reduce((sum, channel) => sum + countEnabled(configs, channel.type), 0)}
-                  /
-                  {channels.reduce(
-                    (sum, channel) =>
-                      sum + configs.filter((config) => config.scraper === channel.type).length,
-                    0
-                  )}
+                  {countEnabledByItemType(configs, itemType)}/{countByItemType(configs, itemType)}
                 </em>
               </button>
-              {!collapsedGroups.has(group) ? (
+              {!collapsedGroups.has(itemType) ? (
                 <div className="channel-group-items">
                   {channels.map((channel) => {
-                    const enabledCount = countEnabled(configs, channel.type)
-                    const totalCount = configs.filter((config) => config.scraper === channel.type).length
+                    const enabledCount = countEnabledByScraper(configs, channel.type, itemType)
+                    const totalCount = countByScraper(configs, channel.type, itemType)
                     const active = activeView === 'configs' && selectedType === channel.type
 
                     return (
