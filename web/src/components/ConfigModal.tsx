@@ -85,7 +85,7 @@ export default function ConfigModal({
       return
     }
     if (!scraper.trim()) {
-      setError('抓取渠道不能为空')
+      setError('抓取器不能为空')
       return
     }
     if (!sourceType.trim()) {
@@ -151,7 +151,7 @@ export default function ConfigModal({
           </label>
 
           <label className="field">
-            <span>渠道</span>
+            <span>抓取器</span>
             <select value={scraper} onChange={(event) => setScraper(event.target.value)}>
               {channels.map((item) => (
                 <option value={item.type} key={item.type}>

@@ -252,7 +252,7 @@ export default function ScraperDashboard({ authUser, onLogout }: ScraperDashboar
 
   return (
     <main className="app-shell">
-      <aside className="sidebar" aria-label="抓取渠道">
+      <aside className="sidebar" aria-label="抓取器">
         <div className="sidebar-head">
           <div className="brand-lockup">
             <div className="brand-dot">
@@ -367,7 +367,7 @@ export default function ScraperDashboard({ authUser, onLogout }: ScraperDashboar
             </div>
             <div>
               <span>{stats.channels}</span>
-              <small>已配置渠道</small>
+              <small>已配置抓取器</small>
             </div>
           </div>
         </header>
@@ -408,7 +408,7 @@ export default function ScraperDashboard({ authUser, onLogout }: ScraperDashboar
                 {selectedConfigs.length === 0 ? (
                   <div className="empty-inline">
                     <LayoutList size={22} aria-hidden="true" />
-                    <span>这个渠道还没有配置。</span>
+                    <span>这个抓取器还没有配置。</span>
                   </div>
                 ) : (
                   selectedConfigs.map((row) => (
