@@ -37,16 +37,17 @@ python3 -m venv .venv
 pip install .
 ```
 
-Run enabled scrapers from the example config and print JSONL:
+Run enabled Supabase scraper configs through the same runner used by the
+`Global Scrape` Action:
 
 ```bash
-python main.py --config configs/scrapers.example.json --date 2026-06-06
+python -m scripts.global_scrape --continue-on-error
 ```
 
 Write JSONL to a file:
 
 ```bash
-python main.py --config configs/scrapers.example.json --output outputs/raw_items.jsonl
+python -m scripts.global_scrape --continue-on-error --output outputs/global_scrape/raw_items.jsonl
 ```
 
 ## DAO Layer
@@ -85,7 +86,7 @@ with OctopusDao.from_env() as dao:
 Run scrapers and write final output rows to RDS:
 
 ```bash
-python main.py --config configs/scrapers.example.json --date 2026-06-06 --write-rds
+python -m scripts.global_scrape --continue-on-error --write-rds
 ```
 
 ## Web Admin
@@ -131,9 +132,8 @@ npm run build
 
 The first screen groups all scraper configs by `item_type` on the left and shows
 the selected rows from `octp_scraper_configs` on the right. Creating or editing
-rows writes to the Supabase `octp_scraper_configs` table. The Python runner still
-supports local JSON config files through `--config`; managed all-source runs use
-the trusted GitHub Action described below.
+rows writes to the Supabase `octp_scraper_configs` table. Managed all-source runs
+use the trusted GitHub Action described below.
 
 There is also a manual GitHub Action named `aliyun_rds_test`. It does not run
 real crawlers. It upserts one deterministic smoke-test row into `raw_items` so
