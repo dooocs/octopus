@@ -1,51 +1,74 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Check, Copy, Save, X } from 'lucide-react'
-import type { JsonValue, ScraperConfigDraft, ScraperConfigRow } from '../types'
+import type { ItemTypeRow, JsonValue, ScraperConfigDraft, ScraperConfigRow } from '../types'
 import type { ScraperChannel } from '../types'
-import { getChannel, scraperChannels } from '../lib/channels'
 import ToggleSwitch from './ToggleSwitch'
 
 type ConfigModalProps = {
   mode: 'create' | 'edit'
   channel: ScraperChannel
+  channels: ScraperChannel[]
+  itemTypes: ItemTypeRow[]
   row?: ScraperConfigRow
   onClose: () => void
   onSave: (draft: ScraperConfigDraft) => Promise<void>
 }
 
-function cloneConfig(config: Record<string, JsonValue>) {
-  return JSON.parse(JSON.stringify(config)) as Record<string, JsonValue>
+function cloneInput(input: Record<string, JsonValue>) {
+  return JSON.parse(JSON.stringify(input)) as Record<string, JsonValue>
 }
 
 function defaultName(channel: ScraperChannel) {
   return channel.type === 'rss' ? 'New RSS Source' : channel.label
 }
 
+function slugify(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+}
+
 export default function ConfigModal({
   mode,
   channel,
+  channels,
+  itemTypes,
   row,
   onClose,
   onSave
 }: ConfigModalProps) {
-  const initialChannel = row ? getChannel(row.scraper_type) || channel : channel
-  const [scraperType, setScraperType] = useState(row?.scraper_type || initialChannel.type)
+  const initialChannel = row ? channels.find((item) => item.type === row.scraper) || channel : channel
+  const [scraper, setScraper] = useState(row?.scraper || initialChannel.type)
   const [name, setName] = useState(row?.name || defaultName(initialChannel))
   const [priority, setPriority] = useState(row?.priority ?? 10)
   const [enabled, setEnabled] = useState(row?.enabled ?? true)
+  const [sourceType, setSourceType] = useState(row?.source_type || initialChannel.sourceType)
+  const [subSourceType, setSubSourceType] = useState(
+    row?.sub_source_type || slugify(defaultName(initialChannel)) || initialChannel.type
+  )
+  const [itemType, setItemType] = useState(row?.item_type || initialChannel.itemType)
   const [jsonText, setJsonText] = useState(
-    JSON.stringify(row?.config || initialChannel.defaultConfig, null, 2)
+    JSON.stringify(row?.input || initialChannel.defaultInput, null, 2)
   )
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
   const [copied, setCopied] = useState(false)
 
-  const activeChannel = useMemo(() => getChannel(scraperType) || channel, [channel, scraperType])
+  const activeChannel = useMemo(
+    () => channels.find((item) => item.type === scraper) || channel,
+    [channel, channels, scraper]
+  )
 
   useEffect(() => {
     if (mode === 'edit') return
-    setJsonText(JSON.stringify(cloneConfig(activeChannel.defaultConfig), null, 2))
-    setName(defaultName(activeChannel))
+    const nextName = defaultName(activeChannel)
+    setJsonText(JSON.stringify(cloneInput(activeChannel.defaultInput), null, 2))
+    setName(nextName)
+    setSourceType(activeChannel.sourceType)
+    setSubSourceType(slugify(nextName) || activeChannel.type)
+    setItemType(activeChannel.itemType)
   }, [activeChannel, mode])
 
   async function handleSave() {
@@ -61,12 +84,24 @@ export default function ConfigModal({
       setError('名称不能为空')
       return
     }
-    if (!scraperType.trim()) {
+    if (!scraper.trim()) {
       setError('抓取渠道不能为空')
       return
     }
+    if (!sourceType.trim()) {
+      setError('source_type 不能为空')
+      return
+    }
+    if (!subSourceType.trim()) {
+      setError('sub_source_type 不能为空')
+      return
+    }
+    if (!itemType.trim()) {
+      setError('item_type 不能为空')
+      return
+    }
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      setError('Config 必须是一个 JSON object')
+      setError('Input 必须是一个 JSON object')
       return
     }
 
@@ -76,10 +111,13 @@ export default function ConfigModal({
       await onSave({
         id: row?.id,
         name: name.trim(),
-        scraper_type: scraperType,
+        scraper: scraper.trim(),
         enabled,
         priority,
-        config: parsed as Record<string, JsonValue>
+        source_type: sourceType.trim(),
+        sub_source_type: subSourceType.trim(),
+        item_type: itemType.trim(),
+        input: parsed as Record<string, JsonValue>
       })
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : String(saveError))
@@ -114,8 +152,8 @@ export default function ConfigModal({
 
           <label className="field">
             <span>渠道</span>
-            <select value={scraperType} onChange={(event) => setScraperType(event.target.value)}>
-              {scraperChannels.map((item) => (
+            <select value={scraper} onChange={(event) => setScraper(event.target.value)}>
+              {channels.map((item) => (
                 <option value={item.type} key={item.type}>
                   {item.label}
                 </option>
@@ -138,6 +176,30 @@ export default function ConfigModal({
             <span>启用</span>
             <ToggleSwitch checked={enabled} label="切换启用状态" onChange={setEnabled} />
           </div>
+
+          <label className="field">
+            <span>source_type</span>
+            <input value={sourceType} onChange={(event) => setSourceType(event.target.value)} />
+          </label>
+
+          <label className="field">
+            <span>sub_source_type</span>
+            <input value={subSourceType} onChange={(event) => setSubSourceType(event.target.value)} />
+          </label>
+
+          <label className="field">
+            <span>item_type</span>
+            <select value={itemType} onChange={(event) => setItemType(event.target.value)}>
+              {itemTypes.length === 0 ? (
+                <option value={itemType}>{itemType}</option>
+              ) : null}
+              {itemTypes.map((item) => (
+                <option value={item.item_type} key={item.item_type}>
+                  {item.item_type}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
 
         <div className="schema-hint">
@@ -146,7 +208,7 @@ export default function ConfigModal({
         </div>
 
         <label className="field json-field">
-          <span>Config JSON</span>
+          <span>Input JSON</span>
           <textarea
             spellCheck={false}
             value={jsonText}

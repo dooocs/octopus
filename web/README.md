@@ -35,10 +35,11 @@ Required Supabase pieces:
 - GitHub OAuth callback URL set to `https://<project-ref>.supabase.co/auth/v1/callback`.
 - Supabase Auth URL configuration includes the deployed Vercel domain and local
   dev URL, for example `http://localhost:5173`.
-- Existing `public.scraper_configs` table from `ahaIndexSync/sql/001_config_tables.sql`.
-- RLS policies should restrict `scraper_configs` reads/writes to the one
+- Existing Octopus admin tables: `public.octp_item_types`,
+  `public.octp_scraper_configs`, and `public.octp_scraper_logs`.
+- RLS policies should restrict Octopus admin table reads/writes to the one
   allowed authenticated user. The client-side gate is for UX only. Use
-  [`docs/supabase-scraper-configs-rls.sql`](docs/supabase-scraper-configs-rls.sql)
+  [`../sql/002_create_octp_scraper_admin_tables.sql`](../sql/002_create_octp_scraper_admin_tables.sql)
   as the SQL template.
 
 ## Vercel

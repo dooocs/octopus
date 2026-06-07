@@ -16,10 +16,11 @@ import {
   Trash2,
   XCircle
 } from 'lucide-react'
-import type { AuthUser, ScraperChannel, ScraperConfigDraft, ScraperConfigRow } from '../types'
+import type { AuthUser, ItemTypeRow, ScraperChannel, ScraperConfigDraft, ScraperConfigRow } from '../types'
 import { getChannel, scraperChannels } from '../lib/channels'
 import {
   deleteScraperConfig,
+  listItemTypes,
   listScraperConfigs,
   saveScraperConfig,
   setScraperConfigEnabled
@@ -52,27 +53,49 @@ function formatTime(value?: string | null) {
 }
 
 function rowToRuntimeConfig(row: ScraperConfigRow) {
-  const channel = getChannel(row.scraper_type)
   return {
-    type: row.scraper_type,
+    type: row.scraper,
     name: row.name,
     enabled: row.enabled,
-    source_type: channel?.sourceType || row.config.source_type || 'website',
-    item_type: channel?.itemType || row.config.content_type || 'article',
-    config: row.config
+    source_type: row.source_type,
+    sub_source_type: row.sub_source_type,
+    item_type: row.item_type,
+    config: row.input
   }
 }
 
-function countEnabled(configs: ScraperConfigRow[], type: string) {
-  return configs.filter((config) => config.scraper_type === type && config.enabled).length
+function countEnabled(configs: ScraperConfigRow[], scraper: string) {
+  return configs.filter((config) => config.scraper === scraper && config.enabled).length
 }
 
 function getDefaultCollapsedGroups() {
   return new Set(scraperChannels.map((channel) => channel.group))
 }
 
+function titleizeScraper(scraper: string) {
+  return scraper
+    .split(/[_-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ')
+}
+
+function channelFromConfig(row: ScraperConfigRow): ScraperChannel {
+  return {
+    type: row.scraper,
+    label: titleizeScraper(row.scraper),
+    group: 'Configured',
+    sourceType: row.source_type,
+    itemType: row.item_type,
+    description: '从现有配置迁移的抓取器。',
+    defaultInput: {},
+    hint: '{ ...input }'
+  }
+}
+
 export default function ScraperDashboard({ authUser, onLogout }: ScraperDashboardProps) {
   const [configs, setConfigs] = useState<ScraperConfigRow[]>([])
+  const [itemTypes, setItemTypes] = useState<ItemTypeRow[]>([])
   const [loading, setLoading] = useState(true)
   const [busyId, setBusyId] = useState<string | number | null>(null)
   const [error, setError] = useState('')
@@ -87,8 +110,9 @@ export default function ScraperDashboard({ authUser, onLogout }: ScraperDashboar
     setLoading(true)
     setError('')
     try {
-      const rows = await listScraperConfigs()
+      const [rows, types] = await Promise.all([listScraperConfigs(), listItemTypes()])
       setConfigs(rows)
+      setItemTypes(types)
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : String(loadError))
     } finally {
@@ -100,20 +124,33 @@ export default function ScraperDashboard({ authUser, onLogout }: ScraperDashboar
     void loadConfigs()
   }, [loadConfigs])
 
+  const allChannels = useMemo(() => {
+    const channels = new Map<string, ScraperChannel>()
+    for (const channel of scraperChannels) {
+      channels.set(channel.type, channel)
+    }
+    for (const row of configs) {
+      if (!channels.has(row.scraper)) {
+        channels.set(row.scraper, channelFromConfig(row))
+      }
+    }
+    return Array.from(channels.values())
+  }, [configs])
+
   const selectedChannel = useMemo(
-    () => getChannel(selectedType) || scraperChannels[0],
-    [selectedType]
+    () => allChannels.find((channel) => channel.type === selectedType) || allChannels[0] || scraperChannels[0],
+    [allChannels, selectedType]
   )
 
   const channelsByGroup = useMemo(() => {
     const groups = new Map<string, ScraperChannel[]>()
-    for (const channel of scraperChannels) {
+    for (const channel of allChannels) {
       const items = groups.get(channel.group) || []
       items.push(channel)
       groups.set(channel.group, items)
     }
     return Array.from(groups.entries())
-  }, [])
+  }, [allChannels])
 
   const visibleEnabledConfigs = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase()
@@ -123,14 +160,15 @@ export default function ScraperDashboard({ authUser, onLogout }: ScraperDashboar
         if (!normalizedQuery) return true
         return (
           config.name.toLowerCase().includes(normalizedQuery) ||
-          config.scraper_type.toLowerCase().includes(normalizedQuery)
+          config.scraper.toLowerCase().includes(normalizedQuery) ||
+          config.sub_source_type.toLowerCase().includes(normalizedQuery)
         )
       })
       .sort((a, b) => a.priority - b.priority || a.name.localeCompare(b.name))
   }, [configs, query])
 
   const selectedConfigs = useMemo(
-    () => configs.filter((config) => config.scraper_type === selectedType),
+    () => configs.filter((config) => config.scraper === selectedType),
     [configs, selectedType]
   )
 
@@ -138,7 +176,7 @@ export default function ScraperDashboard({ authUser, onLogout }: ScraperDashboar
     () => ({
       total: configs.length,
       enabled: configs.filter((config) => config.enabled).length,
-      channels: new Set(configs.map((config) => config.scraper_type)).size
+      channels: new Set(configs.map((config) => config.scraper)).size
     }),
     [configs]
   )
@@ -250,7 +288,7 @@ export default function ScraperDashboard({ authUser, onLogout }: ScraperDashboar
                   /
                   {channels.reduce(
                     (sum, channel) =>
-                      sum + configs.filter((config) => config.scraper_type === channel.type).length,
+                      sum + configs.filter((config) => config.scraper === channel.type).length,
                     0
                   )}
                 </em>
@@ -259,7 +297,7 @@ export default function ScraperDashboard({ authUser, onLogout }: ScraperDashboar
                 <div className="channel-group-items">
                   {channels.map((channel) => {
                     const enabledCount = countEnabled(configs, channel.type)
-                    const totalCount = configs.filter((config) => config.scraper_type === channel.type).length
+                    const totalCount = configs.filter((config) => config.scraper === channel.type).length
                     const active = activeView === 'configs' && selectedType === channel.type
 
                     return (
@@ -369,7 +407,7 @@ export default function ScraperDashboard({ authUser, onLogout }: ScraperDashboar
                     <article className={`local-config ${row.enabled ? '' : 'disabled'}`} key={row.id}>
                       <div>
                         <strong>{row.name}</strong>
-                        <span>P{row.priority} · {formatTime(row.updated_at || row.created_at)}</span>
+                        <span>P{row.priority} · {row.sub_source_type} · {formatTime(row.updated_date || row.created_date)}</span>
                       </div>
                       <div className="row-actions">
                         <ToggleSwitch
@@ -435,7 +473,7 @@ export default function ScraperDashboard({ authUser, onLogout }: ScraperDashboar
                   </div>
                 ) : (
                   visibleEnabledConfigs.map((row) => {
-                    const channel = getChannel(row.scraper_type)
+                    const channel = allChannels.find((item) => item.type === row.scraper) || getChannel(row.scraper)
                     return (
                       <article className="effective-row" key={row.id}>
                         <div className="status-icon">
@@ -444,13 +482,14 @@ export default function ScraperDashboard({ authUser, onLogout }: ScraperDashboar
                         <div className="effective-main">
                           <div className="effective-title">
                             <strong>{row.name}</strong>
-                            <span>{channel?.label || row.scraper_type}</span>
+                            <span>{channel?.label || row.scraper}</span>
                           </div>
                           <div className="effective-meta">
                             <span>P{row.priority}</span>
-                            <span>{channel?.sourceType || String(row.config.source_type || 'source')}</span>
-                            <span>{channel?.itemType || String(row.config.content_type || 'item')}</span>
-                            <span>{formatTime(row.updated_at || row.created_at)}</span>
+                            <span>{row.source_type}</span>
+                            <span>{row.item_type}</span>
+                            <span>{row.sub_source_type}</span>
+                            <span>{formatTime(row.updated_date || row.created_date)}</span>
                           </div>
                         </div>
                         <button
@@ -477,7 +516,15 @@ export default function ScraperDashboard({ authUser, onLogout }: ScraperDashboar
         </div>
       </section>
 
-      {modal ? <ConfigModal {...modal} onClose={() => setModal(null)} onSave={saveDraft} /> : null}
+      {modal ? (
+        <ConfigModal
+          {...modal}
+          channels={allChannels}
+          itemTypes={itemTypes}
+          onClose={() => setModal(null)}
+          onSave={saveDraft}
+        />
+      ) : null}
     </main>
   )
 }

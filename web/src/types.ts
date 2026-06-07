@@ -7,23 +7,35 @@ export type JsonValue =
   | { [key: string]: JsonValue }
 
 export type ScraperConfigRow = {
-  id: string | number
+  id: string
   name: string
-  scraper_type: string
+  scraper: string
   enabled: boolean
   priority: number
-  config: Record<string, JsonValue>
-  created_at?: string | null
-  updated_at?: string | null
+  source_type: string
+  sub_source_type: string
+  item_type: string
+  input: Record<string, JsonValue>
+  created_date?: string | null
+  updated_date?: string | null
 }
 
 export type ScraperConfigDraft = {
-  id?: string | number
+  id?: string
   name: string
-  scraper_type: string
+  scraper: string
   enabled: boolean
   priority: number
-  config: Record<string, JsonValue>
+  source_type: string
+  sub_source_type: string
+  item_type: string
+  input: Record<string, JsonValue>
+}
+
+export type ItemTypeRow = {
+  item_type: string
+  name: string
+  description?: string | null
 }
 
 export type ScraperChannel = {
@@ -33,7 +45,7 @@ export type ScraperChannel = {
   sourceType: string
   itemType: string
   description: string
-  defaultConfig: Record<string, JsonValue>
+  defaultInput: Record<string, JsonValue>
   hint: string
 }
 

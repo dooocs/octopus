@@ -8,12 +8,10 @@ export const scraperChannels: ScraperChannel[] = [
     sourceType: 'code_host',
     itemType: 'repo',
     description: '抓取 GitHub Trending 仓库榜单。',
-    defaultConfig: {
-      source_type: 'code_host',
-      content_type: 'repo',
+    defaultInput: {
       timeout: 15
     },
-    hint: '{ source_type, content_type, timeout }'
+    hint: '{ timeout }'
   },
   {
     type: 'github_search',
@@ -22,9 +20,7 @@ export const scraperChannels: ScraperChannel[] = [
     sourceType: 'code_host',
     itemType: 'repo',
     description: '按关键词搜索近期 GitHub 仓库。',
-    defaultConfig: {
-      source_type: 'code_host',
-      content_type: 'repo',
+    defaultInput: {
       queries: [{ q: 'ai agents stars:>100', label: 'ai_agents' }],
       per_page: 30,
       fetch_window_days: 7
@@ -38,9 +34,7 @@ export const scraperChannels: ScraperChannel[] = [
     sourceType: 'community',
     itemType: 'article',
     description: '抓取 Hacker News 高分新帖。',
-    defaultConfig: {
-      source_type: 'community',
-      content_type: 'article',
+    defaultInput: {
       new_n: 100,
       min_score: 50,
       cutoff_hours: 36,
@@ -56,26 +50,21 @@ export const scraperChannels: ScraperChannel[] = [
     sourceType: 'website',
     itemType: 'article',
     description: '抓取标准 RSS/Atom 订阅源。',
-    defaultConfig: {
-      source_type: 'website',
-      content_type: 'article',
+    defaultInput: {
       url: '',
       max_items: 10,
-      source_tag: '',
       fetch_window_hours: 25
     },
-    hint: '{ url, max_items, source_tag, fetch_window_hours }'
+    hint: '{ url, max_items, fetch_window_hours }'
   },
   {
     type: 'twitter_twscrape',
     label: 'Twitter / X',
     group: 'Social',
     sourceType: 'social',
-    itemType: 'tweet',
+    itemType: 'post',
     description: '抓取关注账号和关键词命中的推文。',
-    defaultConfig: {
-      source_type: 'social',
-      content_type: 'tweet',
+    defaultInput: {
       watch_accounts: [],
       tracked_keywords: [],
       max_age_days: 2,
@@ -84,66 +73,70 @@ export const scraperChannels: ScraperChannel[] = [
     hint: '{ watch_accounts, tracked_keywords, max_age_days, timeline_min_faves }'
   },
   {
+    type: 'twitter_nitter',
+    label: 'Twitter / Nitter',
+    group: 'Social',
+    sourceType: 'social',
+    itemType: 'post',
+    description: '抓取指定 Twitter/X 账号的帖子。',
+    defaultInput: {
+      twitter_user: '',
+      nitter_instances: ['https://nitter.poast.org'],
+      aggregate: true,
+      fetch_window_hours: 25
+    },
+    hint: '{ twitter_user, nitter_instances, aggregate, fetch_window_hours }'
+  },
+  {
     type: 'ai_blog',
     label: 'AI Blog',
     group: 'Website',
     sourceType: 'website',
     itemType: 'article',
     description: '抓取 AI 公司新闻页或博客页面。',
-    defaultConfig: {
-      source_type: 'website',
-      content_type: 'article',
+    defaultInput: {
       base_url: '',
       news_url: '',
       link_selector: "a[href*='/news/']",
-      source_tag: 'official_ai',
       fetch_window_hours: 0
     },
-    hint: '{ base_url, news_url, link_selector, source_tag, fetch_window_hours }'
+    hint: '{ base_url, news_url, link_selector, fetch_window_hours }'
   },
   {
     type: 'community_v2ex',
     label: 'V2EX',
     group: 'Community',
     sourceType: 'community',
-    itemType: 'post',
+    itemType: 'discussion',
     description: '抓取 V2EX 热门技术讨论。',
-    defaultConfig: {
-      source_type: 'community',
-      content_type: 'v2ex_hot',
+    defaultInput: {
       top_n: 10,
       max_replies_to_fetch: 30,
-      max_replies_to_keep: 15,
-      source_tag: 'dev_community'
+      max_replies_to_keep: 15
     },
-    hint: '{ top_n, max_replies_to_fetch, max_replies_to_keep, source_tag }'
+    hint: '{ top_n, max_replies_to_fetch, max_replies_to_keep }'
   },
   {
     type: 'community_linuxdo',
     label: 'LinuxDo',
     group: 'Community',
     sourceType: 'community',
-    itemType: 'post',
+    itemType: 'discussion',
     description: '抓取 LinuxDo 热门讨论。',
-    defaultConfig: {
-      source_type: 'community',
-      content_type: 'linuxdo_hot',
+    defaultInput: {
       top_n: 10,
-      max_replies_to_fetch: 30,
-      source_tag: 'dev_community'
+      max_replies_to_fetch: 30
     },
-    hint: '{ top_n, max_replies_to_fetch, source_tag }'
+    hint: '{ top_n, max_replies_to_fetch }'
   },
   {
     type: 'reddit',
     label: 'Reddit',
     group: 'Community',
     sourceType: 'community',
-    itemType: 'post',
+    itemType: 'discussion',
     description: '抓取指定 subreddit 的高分讨论。',
-    defaultConfig: {
-      source_type: 'community',
-      content_type: 'reddit',
+    defaultInput: {
       subreddit: 'LocalLLaMA',
       min_score: 50,
       skip_nsfw: true,
@@ -154,21 +147,32 @@ export const scraperChannels: ScraperChannel[] = [
     hint: '{ subreddit, min_score, skip_nsfw, skip_stickied }'
   },
   {
-    type: 'huggingface',
-    label: 'Hugging Face',
+    type: 'hf_model',
+    label: 'Hugging Face Models',
     group: 'AI',
     sourceType: 'model_hub',
     itemType: 'model',
-    description: '抓取 Hugging Face 模型或论文趋势。',
-    defaultConfig: {
-      source_type: 'model_hub',
-      content_type: 'hf_model',
+    description: '抓取 Hugging Face 模型趋势。',
+    defaultInput: {
       min_likes: 50,
       min_downloads: 1000,
       limit: 3,
       max_retries: 3
     },
-    hint: '{ content_type, min_likes, min_downloads, limit, max_retries }'
+    hint: '{ min_likes, min_downloads, limit, max_retries }'
+  },
+  {
+    type: 'hf_papers',
+    label: 'Hugging Face Papers',
+    group: 'AI',
+    sourceType: 'model_hub',
+    itemType: 'paper',
+    description: '抓取 Hugging Face Daily Papers。',
+    defaultInput: {
+      top_n: 3,
+      max_retries: 3
+    },
+    hint: '{ top_n, max_retries }'
   },
   {
     type: 'product_hunt',
@@ -177,9 +181,7 @@ export const scraperChannels: ScraperChannel[] = [
     sourceType: 'product',
     itemType: 'product',
     description: '抓取 Product Hunt 高票新产品。',
-    defaultConfig: {
-      source_type: 'product',
-      content_type: 'product_hunt',
+    defaultInput: {
       min_votes: 200,
       max_retries: 3,
       topic_whitelist: [],
