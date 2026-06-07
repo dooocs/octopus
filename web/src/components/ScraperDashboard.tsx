@@ -8,6 +8,7 @@ import {
   Copy,
   Edit3,
   Github,
+  History,
   LayoutList,
   LogOut,
   Plus,
@@ -26,6 +27,7 @@ import {
   setScraperConfigEnabled
 } from '../lib/scraperConfigs'
 import ConfigModal from './ConfigModal'
+import ScraperLogsPanel from './ScraperLogsPanel'
 import ToggleSwitch from './ToggleSwitch'
 
 type ScraperDashboardProps = {
@@ -37,7 +39,7 @@ type ModalState =
   | { mode: 'create'; channel: ScraperChannel; row?: never }
   | { mode: 'edit'; channel: ScraperChannel; row: ScraperConfigRow }
 
-type ActiveView = 'configs' | 'effective'
+type ActiveView = 'configs' | 'effective' | 'logs'
 
 function formatTime(value?: string | null) {
   if (!value) return '-'
@@ -195,6 +197,12 @@ export default function ScraperDashboard({ authUser, onLogout }: ScraperDashboar
     [configs]
   )
 
+  const topbarCopy = useMemo(() => {
+    if (activeView === 'logs') return { eyebrow: 'Scraper Logs', title: '运行日志' }
+    if (activeView === 'effective') return { eyebrow: 'Enabled Now', title: '当前生效的抓取配置' }
+    return { eyebrow: 'Scraper Configs', title: '抓取配置管理' }
+  }, [activeView])
+
   async function saveDraft(draft: ScraperConfigDraft) {
     await saveScraperConfig(draft)
     setModal(null)
@@ -278,6 +286,15 @@ export default function ScraperDashboard({ authUser, onLogout }: ScraperDashboar
             <span>当前生效的抓取配置</span>
             <em>{stats.enabled}</em>
           </button>
+          <button
+            type="button"
+            className={`sidebar-nav-item ${activeView === 'logs' ? 'active' : ''}`}
+            onClick={() => setActiveView('logs')}
+          >
+            <History size={16} aria-hidden="true" />
+            <span>运行日志</span>
+            <em>Logs</em>
+          </button>
         </nav>
 
         <div className="channel-list">
@@ -353,8 +370,8 @@ export default function ScraperDashboard({ authUser, onLogout }: ScraperDashboar
       <section className="workspace">
         <header className="topbar">
           <div>
-            <div className="eyebrow">Scraper Configs</div>
-            <h1>抓取配置管理</h1>
+            <div className="eyebrow">{topbarCopy.eyebrow}</div>
+            <h1>{topbarCopy.title}</h1>
           </div>
           <div className="stat-strip" aria-label="配置统计">
             <div>
@@ -446,7 +463,7 @@ export default function ScraperDashboard({ authUser, onLogout }: ScraperDashboar
                 )}
               </div>
             </section>
-          ) : (
+          ) : activeView === 'effective' ? (
             <section className="effective-panel" aria-labelledby="effective-title">
               <div className="section-head">
                 <div>
@@ -520,6 +537,8 @@ export default function ScraperDashboard({ authUser, onLogout }: ScraperDashboar
                 )}
               </div>
             </section>
+          ) : (
+            <ScraperLogsPanel configs={configs} />
           )}
         </div>
       </section>

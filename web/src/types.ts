@@ -32,6 +32,29 @@ export type ScraperConfigDraft = {
   input: Record<string, JsonValue>
 }
 
+export type ScraperLogStatus = 'running' | 'success' | 'failed' | 'partial' | 'skipped'
+
+export type ScraperLogRow = {
+  id: string
+  scraper_config_id?: string | null
+  snapshot_date: string
+  github_run_id?: string | null
+  config_snapshot: Record<string, JsonValue>
+  status: ScraperLogStatus
+  duration_ms?: number | null
+  result: Record<string, JsonValue>
+  error_message?: string | null
+  error_logs: JsonValue[]
+  created_date?: string | null
+  updated_date?: string | null
+}
+
+export type ScraperLogDateSummaryRow = {
+  snapshot_date: string
+  status: ScraperLogStatus
+  created_date?: string | null
+}
+
 export type ItemTypeRow = {
   item_type: string
   name: string
