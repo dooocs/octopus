@@ -1,0 +1,483 @@
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import {
+  AlertCircle,
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  Code2,
+  Copy,
+  Edit3,
+  Github,
+  LayoutList,
+  LogOut,
+  Plus,
+  RefreshCw,
+  Search,
+  Trash2,
+  XCircle
+} from 'lucide-react'
+import type { AuthUser, ScraperChannel, ScraperConfigDraft, ScraperConfigRow } from '../types'
+import { getChannel, scraperChannels } from '../lib/channels'
+import {
+  deleteScraperConfig,
+  listScraperConfigs,
+  saveScraperConfig,
+  setScraperConfigEnabled
+} from '../lib/scraperConfigs'
+import ConfigModal from './ConfigModal'
+import ToggleSwitch from './ToggleSwitch'
+
+type ScraperDashboardProps = {
+  authUser: AuthUser
+  onLogout: () => void
+}
+
+type ModalState =
+  | { mode: 'create'; channel: ScraperChannel; row?: never }
+  | { mode: 'edit'; channel: ScraperChannel; row: ScraperConfigRow }
+
+type ActiveView = 'configs' | 'effective'
+
+function formatTime(value?: string | null) {
+  if (!value) return '-'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '-'
+
+  return new Intl.DateTimeFormat('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  }).format(date)
+}
+
+function rowToRuntimeConfig(row: ScraperConfigRow) {
+  const channel = getChannel(row.scraper_type)
+  return {
+    type: row.scraper_type,
+    name: row.name,
+    enabled: row.enabled,
+    source_type: channel?.sourceType || row.config.source_type || 'website',
+    item_type: channel?.itemType || row.config.content_type || 'article',
+    config: row.config
+  }
+}
+
+function countEnabled(configs: ScraperConfigRow[], type: string) {
+  return configs.filter((config) => config.scraper_type === type && config.enabled).length
+}
+
+function getDefaultCollapsedGroups() {
+  return new Set(scraperChannels.map((channel) => channel.group))
+}
+
+export default function ScraperDashboard({ authUser, onLogout }: ScraperDashboardProps) {
+  const [configs, setConfigs] = useState<ScraperConfigRow[]>([])
+  const [loading, setLoading] = useState(true)
+  const [busyId, setBusyId] = useState<string | number | null>(null)
+  const [error, setError] = useState('')
+  const [query, setQuery] = useState('')
+  const [selectedType, setSelectedType] = useState(scraperChannels[0]?.type || '')
+  const [activeView, setActiveView] = useState<ActiveView>('configs')
+  const [modal, setModal] = useState<ModalState | null>(null)
+  const [copied, setCopied] = useState(false)
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(getDefaultCollapsedGroups)
+
+  const loadConfigs = useCallback(async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const rows = await listScraperConfigs()
+      setConfigs(rows)
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : String(loadError))
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    void loadConfigs()
+  }, [loadConfigs])
+
+  const selectedChannel = useMemo(
+    () => getChannel(selectedType) || scraperChannels[0],
+    [selectedType]
+  )
+
+  const channelsByGroup = useMemo(() => {
+    const groups = new Map<string, ScraperChannel[]>()
+    for (const channel of scraperChannels) {
+      const items = groups.get(channel.group) || []
+      items.push(channel)
+      groups.set(channel.group, items)
+    }
+    return Array.from(groups.entries())
+  }, [])
+
+  const visibleEnabledConfigs = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase()
+    return configs
+      .filter((config) => config.enabled)
+      .filter((config) => {
+        if (!normalizedQuery) return true
+        return (
+          config.name.toLowerCase().includes(normalizedQuery) ||
+          config.scraper_type.toLowerCase().includes(normalizedQuery)
+        )
+      })
+      .sort((a, b) => a.priority - b.priority || a.name.localeCompare(b.name))
+  }, [configs, query])
+
+  const selectedConfigs = useMemo(
+    () => configs.filter((config) => config.scraper_type === selectedType),
+    [configs, selectedType]
+  )
+
+  const stats = useMemo(
+    () => ({
+      total: configs.length,
+      enabled: configs.filter((config) => config.enabled).length,
+      channels: new Set(configs.map((config) => config.scraper_type)).size
+    }),
+    [configs]
+  )
+
+  async function saveDraft(draft: ScraperConfigDraft) {
+    await saveScraperConfig(draft)
+    setModal(null)
+    await loadConfigs()
+  }
+
+  async function toggleRow(row: ScraperConfigRow, enabled: boolean) {
+    setBusyId(row.id)
+    setError('')
+    try {
+      await setScraperConfigEnabled(row.id, enabled)
+      setConfigs((current) =>
+        current.map((item) => (item.id === row.id ? { ...item, enabled } : item))
+      )
+    } catch (toggleError) {
+      setError(toggleError instanceof Error ? toggleError.message : String(toggleError))
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  async function removeRow(row: ScraperConfigRow) {
+    if (!window.confirm(`确定要删除 "${row.name}" 吗？`)) return
+
+    setBusyId(row.id)
+    setError('')
+    try {
+      await deleteScraperConfig(row.id)
+      setConfigs((current) => current.filter((item) => item.id !== row.id))
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : String(deleteError))
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  async function copyRuntimeJson() {
+    const runtimeConfigs = visibleEnabledConfigs.map(rowToRuntimeConfig)
+    await navigator.clipboard.writeText(JSON.stringify(runtimeConfigs, null, 2))
+    setCopied(true)
+    window.setTimeout(() => setCopied(false), 1400)
+  }
+
+  function toggleGroup(group: string) {
+    setCollapsedGroups((current) => {
+      const next = new Set(current)
+      if (next.has(group)) {
+        next.delete(group)
+      } else {
+        next.add(group)
+      }
+      return next
+    })
+  }
+
+  return (
+    <main className="app-shell">
+      <aside className="sidebar" aria-label="抓取渠道">
+        <div className="sidebar-head">
+          <div className="brand-lockup">
+            <div className="brand-dot">
+              <Code2 size={18} aria-hidden="true" />
+            </div>
+            <div>
+              <strong>Octopus</strong>
+              <span>Scraper Admin</span>
+            </div>
+          </div>
+          <button className="icon-button" type="button" aria-label="刷新配置" onClick={() => void loadConfigs()}>
+            <RefreshCw size={17} aria-hidden="true" />
+          </button>
+        </div>
+
+        <nav className="sidebar-nav" aria-label="配置视图">
+          <button
+            type="button"
+            className={`sidebar-nav-item ${activeView === 'effective' ? 'active' : ''}`}
+            onClick={() => setActiveView('effective')}
+          >
+            <CheckCircle2 size={16} aria-hidden="true" />
+            <span>当前生效的抓取配置</span>
+            <em>{stats.enabled}</em>
+          </button>
+        </nav>
+
+        <div className="channel-list">
+          {channelsByGroup.map(([group, channels]) => (
+            <section className="channel-group" key={group}>
+              <button
+                type="button"
+                className="group-toggle"
+                aria-expanded={!collapsedGroups.has(group)}
+                onClick={() => toggleGroup(group)}
+              >
+                <span>
+                  {collapsedGroups.has(group) ? (
+                    <ChevronRight size={14} aria-hidden="true" />
+                  ) : (
+                    <ChevronDown size={14} aria-hidden="true" />
+                  )}
+                  {group}
+                </span>
+                <em>
+                  {channels.reduce((sum, channel) => sum + countEnabled(configs, channel.type), 0)}
+                  /
+                  {channels.reduce(
+                    (sum, channel) =>
+                      sum + configs.filter((config) => config.scraper_type === channel.type).length,
+                    0
+                  )}
+                </em>
+              </button>
+              {!collapsedGroups.has(group) ? (
+                <div className="channel-group-items">
+                  {channels.map((channel) => {
+                    const enabledCount = countEnabled(configs, channel.type)
+                    const totalCount = configs.filter((config) => config.scraper_type === channel.type).length
+                    const active = activeView === 'configs' && selectedType === channel.type
+
+                    return (
+                      <button
+                        key={channel.type}
+                        type="button"
+                        className={`channel-item ${active ? 'active' : ''}`}
+                        onClick={() => {
+                          setSelectedType(channel.type)
+                          setActiveView('configs')
+                        }}
+                      >
+                        <div>
+                          <span>{channel.label}</span>
+                          <small>{channel.type}</small>
+                        </div>
+                        <em>{enabledCount}/{totalCount}</em>
+                      </button>
+                    )
+                  })}
+                </div>
+              ) : null}
+            </section>
+          ))}
+        </div>
+
+        <div className="profile-box">
+          {authUser.avatarUrl ? (
+            <img src={authUser.avatarUrl} alt="" />
+          ) : (
+            <div className="avatar-fallback">{authUser.name.charAt(0).toUpperCase()}</div>
+          )}
+          <div>
+            <strong>{authUser.name}</strong>
+            <span>
+              <Github size={12} aria-hidden="true" /> @{authUser.login}
+            </span>
+          </div>
+          <button className="icon-button" type="button" aria-label="退出登录" onClick={onLogout}>
+            <LogOut size={16} aria-hidden="true" />
+          </button>
+        </div>
+      </aside>
+
+      <section className="workspace">
+        <header className="topbar">
+          <div>
+            <div className="eyebrow">Scraper Configs</div>
+            <h1>抓取配置管理</h1>
+          </div>
+          <div className="stat-strip" aria-label="配置统计">
+            <div>
+              <span>{stats.total}</span>
+              <small>全部配置</small>
+            </div>
+            <div>
+              <span>{stats.enabled}</span>
+              <small>当前生效</small>
+            </div>
+            <div>
+              <span>{stats.channels}</span>
+              <small>已配置渠道</small>
+            </div>
+          </div>
+        </header>
+
+        {error ? (
+          <div className="notice notice-error">
+            <AlertCircle size={18} aria-hidden="true" />
+            <span>{error}</span>
+          </div>
+        ) : null}
+
+        <div className="content-grid">
+          {activeView === 'configs' ? (
+            <section className="channel-detail" aria-labelledby="channel-title">
+              <div className="section-head">
+                <div>
+                  <div className="eyebrow">Selected Channel</div>
+                  <h2 id="channel-title">{selectedChannel.label}</h2>
+                </div>
+                <button
+                  className="primary-button"
+                  type="button"
+                  onClick={() => setModal({ mode: 'create', channel: selectedChannel })}
+                >
+                  <Plus size={16} aria-hidden="true" />
+                  <span>新增配置</span>
+                </button>
+              </div>
+
+              <p className="channel-desc">{selectedChannel.description}</p>
+              <div className="channel-meta">
+                <span>{selectedChannel.sourceType}</span>
+                <span>{selectedChannel.itemType}</span>
+                <code>{selectedChannel.hint}</code>
+              </div>
+
+              <div className="local-config-list">
+                {selectedConfigs.length === 0 ? (
+                  <div className="empty-inline">
+                    <LayoutList size={22} aria-hidden="true" />
+                    <span>这个渠道还没有配置。</span>
+                  </div>
+                ) : (
+                  selectedConfigs.map((row) => (
+                    <article className={`local-config ${row.enabled ? '' : 'disabled'}`} key={row.id}>
+                      <div>
+                        <strong>{row.name}</strong>
+                        <span>P{row.priority} · {formatTime(row.updated_at || row.created_at)}</span>
+                      </div>
+                      <div className="row-actions">
+                        <ToggleSwitch
+                          checked={row.enabled}
+                          disabled={busyId === row.id}
+                          label={`切换 ${row.name} 启用状态`}
+                          onChange={(enabled) => void toggleRow(row, enabled)}
+                        />
+                        <button
+                          className="icon-button"
+                          type="button"
+                          aria-label={`编辑 ${row.name}`}
+                          onClick={() => setModal({ mode: 'edit', channel: selectedChannel, row })}
+                        >
+                          <Edit3 size={16} aria-hidden="true" />
+                        </button>
+                        <button
+                          className="icon-button danger"
+                          type="button"
+                          aria-label={`删除 ${row.name}`}
+                          onClick={() => void removeRow(row)}
+                        >
+                          <Trash2 size={16} aria-hidden="true" />
+                        </button>
+                      </div>
+                    </article>
+                  ))
+                )}
+              </div>
+            </section>
+          ) : (
+            <section className="effective-panel" aria-labelledby="effective-title">
+              <div className="section-head">
+                <div>
+                  <div className="eyebrow">Enabled Now</div>
+                  <h2 id="effective-title">当前生效的抓取配置</h2>
+                </div>
+                <button className="secondary-button" type="button" onClick={copyRuntimeJson}>
+                  <Copy size={16} aria-hidden="true" />
+                  <span>{copied ? '已复制' : '导出 JSON'}</span>
+                </button>
+              </div>
+
+              <div className="search-box">
+                <Search size={16} aria-hidden="true" />
+                <input
+                  value={query}
+                  placeholder="搜索生效配置"
+                  onChange={(event) => setQuery(event.target.value)}
+                />
+              </div>
+
+              <div className="effective-list" aria-live="polite">
+                {loading ? (
+                  <div className="empty-state">
+                    <RefreshCw className="spin" size={26} aria-hidden="true" />
+                    <span>加载配置中...</span>
+                  </div>
+                ) : visibleEnabledConfigs.length === 0 ? (
+                  <div className="empty-state">
+                    <XCircle size={28} aria-hidden="true" />
+                    <span>没有匹配的生效配置。</span>
+                  </div>
+                ) : (
+                  visibleEnabledConfigs.map((row) => {
+                    const channel = getChannel(row.scraper_type)
+                    return (
+                      <article className="effective-row" key={row.id}>
+                        <div className="status-icon">
+                          <CheckCircle2 size={18} aria-hidden="true" />
+                        </div>
+                        <div className="effective-main">
+                          <div className="effective-title">
+                            <strong>{row.name}</strong>
+                            <span>{channel?.label || row.scraper_type}</span>
+                          </div>
+                          <div className="effective-meta">
+                            <span>P{row.priority}</span>
+                            <span>{channel?.sourceType || String(row.config.source_type || 'source')}</span>
+                            <span>{channel?.itemType || String(row.config.content_type || 'item')}</span>
+                            <span>{formatTime(row.updated_at || row.created_at)}</span>
+                          </div>
+                        </div>
+                        <button
+                          className="icon-button"
+                          type="button"
+                          aria-label={`编辑 ${row.name}`}
+                          onClick={() =>
+                            setModal({
+                              mode: 'edit',
+                              channel: channel || selectedChannel,
+                              row
+                            })
+                          }
+                        >
+                          <Edit3 size={16} aria-hidden="true" />
+                        </button>
+                      </article>
+                    )
+                  })
+                )}
+              </div>
+            </section>
+          )}
+        </div>
+      </section>
+
+      {modal ? <ConfigModal {...modal} onClose={() => setModal(null)} onSave={saveDraft} /> : null}
+    </main>
+  )
+}

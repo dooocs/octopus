@@ -88,6 +88,55 @@ Run scrapers and write final output rows to RDS:
 python main.py --config configs/scrapers.example.json --date 2026-06-06 --write-rds
 ```
 
+## Web Admin
+
+The React admin site lives in [`web/`](web/). It is a Vite app intended to be
+deployed to Vercel with `web` as the project root directory.
+
+It uses Supabase Auth with GitHub OAuth, matching the existing `ahaAdmin`
+pattern. It defaults to the same Supabase project and publishable key used by
+`ahaAdmin`; Vercel environment variables can override them:
+
+```bash
+VITE_SUPABASE_URL=https://wyhpcfjtmtitorinkevj.supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_Mhngg1gf4z4dkj-xh5TsMg_Pz3crwfo
+VITE_ALLOWED_GITHUB_LOGIN=walihome
+VITE_ALLOWED_SUPABASE_USER_ID=
+```
+
+`VITE_ALLOWED_SUPABASE_USER_ID` is optional but recommended for deployment
+because a Supabase user UUID is more stable than GitHub profile metadata. Do not
+put a Supabase service-role key in this frontend.
+
+Supabase does not need a separate install step for this web app. Make sure the
+GitHub Auth provider is enabled, the Auth redirect URL allow list includes the
+Vercel domain and `http://localhost:5173`, and `scraper_configs` remains exposed
+with RLS policies that restrict reads/writes to the single allowed user. The
+RLS template is in
+[`web/docs/supabase-scraper-configs-rls.sql`](web/docs/supabase-scraper-configs-rls.sql).
+
+Local development:
+
+```bash
+cd web
+npm install
+npm run dev
+```
+
+Build verification:
+
+```bash
+cd web
+npm run build
+```
+
+The first screen shows all supported crawler channels on the left and the
+currently enabled rows from `scraper_configs` on the right. Creating or editing
+rows writes to the existing Supabase `scraper_configs` table. The Python runner
+still supports local JSON config files through `--config`; wiring scheduled
+crawler runs directly to remote managed configs should be done in a trusted
+server or pipeline layer rather than from the public Vercel frontend.
+
 There is also a manual GitHub Action named `aliyun_rds_test`. It does not run
 real crawlers. It upserts one deterministic smoke-test row into `raw_items` so
 you can validate RDS connectivity, credentials, table structure, and DAO writes.

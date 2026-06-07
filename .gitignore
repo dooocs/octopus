@@ -8,3 +8,6 @@ __pycache__/
 dist/
 build/
 outputs/
+node_modules/
+web/dist/
+web/.env.local
