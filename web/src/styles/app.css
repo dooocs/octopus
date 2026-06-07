@@ -781,16 +781,22 @@ button:disabled {
 }
 
 .toggle {
+  appearance: none;
   position: relative;
   display: inline-flex;
-  flex: 0 0 46px;
+  flex: none;
   width: 46px;
   height: 28px;
+  min-width: 46px;
   min-height: 28px;
+  max-width: 46px;
+  max-height: 28px;
   padding: 0;
   border: 1px solid var(--border-strong);
   border-radius: 999px;
   background: var(--surface-3);
+  line-height: 0;
+  overflow: hidden;
   transition: background 0.15s ease, border-color 0.15s ease;
 }
 
