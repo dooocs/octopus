@@ -6,6 +6,7 @@ import {
   ChevronRight,
   Code2,
   Copy,
+  Database,
   Edit3,
   Github,
   History,
@@ -27,6 +28,7 @@ import {
   setScraperConfigEnabled
 } from '../lib/scraperConfigs'
 import ConfigModal from './ConfigModal'
+import RawItemsSnapshotPanel from './RawItemsSnapshotPanel'
 import ScraperLogsPanel from './ScraperLogsPanel'
 import ToggleSwitch from './ToggleSwitch'
 
@@ -39,7 +41,7 @@ type ModalState =
   | { mode: 'create'; channel: ScraperChannel; row?: never }
   | { mode: 'edit'; channel: ScraperChannel; row: ScraperConfigRow }
 
-type ActiveView = 'configs' | 'effective' | 'logs'
+type ActiveView = 'configs' | 'effective' | 'logs' | 'snapshots'
 
 function formatTime(value?: string | null) {
   if (!value) return '-'
@@ -198,6 +200,7 @@ export default function ScraperDashboard({ authUser, onLogout }: ScraperDashboar
   )
 
   const topbarCopy = useMemo(() => {
+    if (activeView === 'snapshots') return { eyebrow: 'Raw Items Snapshot', title: '快照内容' }
     if (activeView === 'logs') return { eyebrow: 'Scraper Logs', title: '运行日志' }
     if (activeView === 'effective') return { eyebrow: 'Enabled Now', title: '当前生效的抓取配置' }
     return { eyebrow: 'Scraper Configs', title: '抓取配置管理' }
@@ -373,18 +376,28 @@ export default function ScraperDashboard({ authUser, onLogout }: ScraperDashboar
             <div className="eyebrow">{topbarCopy.eyebrow}</div>
             <h1>{topbarCopy.title}</h1>
           </div>
-          <div className="stat-strip" aria-label="配置统计">
-            <div>
-              <span>{stats.total}</span>
-              <small>全部配置</small>
-            </div>
-            <div>
-              <span>{stats.enabled}</span>
-              <small>当前生效</small>
-            </div>
-            <div>
-              <span>{stats.channels}</span>
-              <small>已配置抓取器</small>
+          <div className="topbar-actions">
+            <button
+              className={`topbar-view-button ${activeView === 'snapshots' ? 'active' : ''}`}
+              type="button"
+              onClick={() => setActiveView('snapshots')}
+            >
+              <Database size={16} aria-hidden="true" />
+              <span>快照内容</span>
+            </button>
+            <div className="stat-strip" aria-label="配置统计">
+              <div>
+                <span>{stats.total}</span>
+                <small>全部配置</small>
+              </div>
+              <div>
+                <span>{stats.enabled}</span>
+                <small>当前生效</small>
+              </div>
+              <div>
+                <span>{stats.channels}</span>
+                <small>已配置抓取器</small>
+              </div>
             </div>
           </div>
         </header>
@@ -537,8 +550,10 @@ export default function ScraperDashboard({ authUser, onLogout }: ScraperDashboar
                 )}
               </div>
             </section>
-          ) : (
+          ) : activeView === 'logs' ? (
             <ScraperLogsPanel configs={configs} />
+          ) : (
+            <RawItemsSnapshotPanel />
           )}
         </div>
       </section>

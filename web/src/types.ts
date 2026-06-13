@@ -55,6 +55,26 @@ export type ScraperLogDateSummaryRow = {
   created_date?: string | null
 }
 
+export type RawItemSnapshotRow = {
+  id: string
+  url: string
+  source_type: string
+  sub_source_type: string
+  item_type: string
+  author_id?: string | null
+  author_url?: string | null
+  created_date: string
+  updated_date: string
+  source_published_date?: string | null
+  snapshot_date: string
+  title: string
+  metrics?: JsonValue | null
+  content?: string | null
+  context_content?: JsonValue | null
+  extra?: JsonValue | null
+  scrape_config_snapshot?: JsonValue | null
+}
+
 export type ItemTypeRow = {
   item_type: string
   name: string
