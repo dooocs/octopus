@@ -74,6 +74,15 @@ jobs:
           fi
           python -m scripts.global_scrape "${ARGS[@]}"
 
+      - name: Refresh Supabase raw_items snapshot
+        if: ${{ inputs.write_rds }}
+        run: |
+          ARGS=()
+          if [ -n "$SNAPSHOT_DATE" ]; then
+            ARGS+=(--date "$SNAPSHOT_DATE")
+          fi
+          python -m scripts.sync_raw_items_snapshot "${ARGS[@]}"
+
       - name: Upload raw_items JSONL artifact
         if: always()
         uses: actions/upload-artifact@v4

@@ -148,6 +148,22 @@ The manual GitHub Action `Global Scrape` reads enabled rows from Supabase
 `octp_scraper_logs`, runs the supported Octopus scraper engines, and can upsert
 the resulting rows into the Aliyun RDS `raw_items` table.
 
+When `write_rds` is enabled, the Action then refreshes one Supabase frontend
+test table, `octp_snapshot_raw_items`. The refresh reads Aliyun RDS `raw_items`
+for the same `snapshot_date`, deletes the existing snapshot rows in Supabase,
+and inserts the current rows in batches. This table is a single-day test
+snapshot, not a full historical mirror of `raw_items`.
+
+Create the Supabase snapshot table once before enabling the refresh step:
+
+```bash
+sql/005_create_octp_snapshot_raw_items.sql
+```
+
+The refresh uses `SUPABASE_SERVICE_ROLE_KEY` on the server side. Frontend clients
+should only read `octp_snapshot_raw_items`; RLS follows the existing Octopus
+admin gate, so `anon` is not granted access.
+
 Required GitHub secrets:
 
 ```bash
@@ -178,6 +194,7 @@ Manual local equivalent:
 
 ```bash
 python -m scripts.global_scrape --continue-on-error --write-rds
+python -m scripts.sync_raw_items_snapshot
 ```
 
 ## Output Table

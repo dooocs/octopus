@@ -23,6 +23,7 @@ dependencies = [
 [project.scripts]
 octopus-aliyun-rds-test = "scripts.aliyun_rds_test_insert:main"
 octopus-global-scrape = "scripts.global_scrape:main"
+octopus-sync-raw-items-snapshot = "scripts.sync_raw_items_snapshot:main"
 
 [tool.setuptools.packages.find]
 include = ["infra*", "scrapers*", "scripts*"]
