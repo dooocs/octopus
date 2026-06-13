@@ -291,6 +291,15 @@ export default function ScraperDashboard({ authUser, onLogout }: ScraperDashboar
           </button>
           <button
             type="button"
+            className={`sidebar-nav-item ${activeView === 'snapshots' ? 'active' : ''}`}
+            onClick={() => setActiveView('snapshots')}
+          >
+            <Database size={16} aria-hidden="true" />
+            <span>快照内容</span>
+            <em>Raw</em>
+          </button>
+          <button
+            type="button"
             className={`sidebar-nav-item ${activeView === 'logs' ? 'active' : ''}`}
             onClick={() => setActiveView('logs')}
           >
@@ -377,14 +386,6 @@ export default function ScraperDashboard({ authUser, onLogout }: ScraperDashboar
             <h1>{topbarCopy.title}</h1>
           </div>
           <div className="topbar-actions">
-            <button
-              className={`topbar-view-button ${activeView === 'snapshots' ? 'active' : ''}`}
-              type="button"
-              onClick={() => setActiveView('snapshots')}
-            >
-              <Database size={16} aria-hidden="true" />
-              <span>快照内容</span>
-            </button>
             <div className="stat-strip" aria-label="配置统计">
               <div>
                 <span>{stats.total}</span>

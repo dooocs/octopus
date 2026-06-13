@@ -587,32 +587,6 @@ button:disabled {
   min-width: 0;
 }
 
-.topbar-view-button {
-  min-height: 58px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-  color: var(--ink);
-  padding: 0 14px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  font-weight: 800;
-  white-space: nowrap;
-}
-
-.topbar-view-button:hover {
-  border-color: var(--border-strong);
-  background: var(--surface-2);
-}
-
-.topbar-view-button.active {
-  color: var(--white);
-  background: var(--charcoal);
-  border-color: var(--charcoal);
-}
-
 .stat-strip {
   display: grid;
   grid-template-columns: repeat(3, minmax(92px, 1fr));
@@ -1853,11 +1827,6 @@ button:disabled {
     width: 100%;
     align-items: stretch;
     flex-direction: column;
-  }
-
-  .topbar-view-button {
-    width: 100%;
-    min-height: 44px;
   }
 
   .stat-strip,
