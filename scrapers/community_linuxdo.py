@@ -3,6 +3,7 @@
 import re
 import requests
 from datetime import datetime, timezone
+from infra.http import http_get
 from infra.models import BaseScraper, RawItem
 from scrapers.registry import register
 
@@ -18,7 +19,7 @@ class LinuxDoEngine(BaseScraper):
         source_tag = self.config.get("source_tag", "dev_community")
 
         try:
-            resp = requests.get(f"{LINUXDO_BASE}/top.json?period=daily", headers=HEADERS, timeout=15)
+            resp = http_get(f"{LINUXDO_BASE}/top.json?period=daily", headers=HEADERS, timeout=15)
             if resp.status_code != 200:
                 return []
             topics = resp.json().get("topic_list", {}).get("topics", [])
@@ -57,7 +58,7 @@ class LinuxDoEngine(BaseScraper):
 
     def _fetch_replies(self, topic_id: int, max_replies: int) -> list[str]:
         try:
-            resp = requests.get(f"{LINUXDO_BASE}/t/{topic_id}.json", headers=HEADERS, timeout=10)
+            resp = http_get(f"{LINUXDO_BASE}/t/{topic_id}.json", headers=HEADERS, timeout=10)
             if resp.status_code != 200:
                 return []
             posts = resp.json().get("post_stream", {}).get("posts", [])

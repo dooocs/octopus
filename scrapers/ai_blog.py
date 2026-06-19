@@ -5,6 +5,7 @@ import re
 import requests
 from bs4 import BeautifulSoup
 from datetime import datetime, timezone, timedelta
+from infra.http import http_get
 from infra.models import BaseScraper, RawItem
 from scrapers.registry import register
 
@@ -47,7 +48,7 @@ class AIBlogEngine(BaseScraper):
             cutoff = datetime.now(timezone.utc) - timedelta(hours=fetch_window)
 
         try:
-            res = requests.get(news_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
+            res = http_get(news_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
             res.raise_for_status()
             soup = BeautifulSoup(res.text, "html.parser")
 

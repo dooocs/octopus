@@ -1,23 +1,30 @@
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import time
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+except ImportError:  # pragma: no cover
+    def load_dotenv() -> None:
+        return None
 
-from infra.dao import OctopusDao, RawItemRecord
-from infra.scraper_runner import run_scrapers
-from scrapers.registry import list_types
+from core.runner import run_config
+from pipeline.sinks import JsonlSink, RdsSink
 from scripts.octp_supabase import (
     SupabaseRestClient,
     load_enabled_runtime_configs,
     split_supported_configs,
 )
+from core.registry import list_types
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
 def _github_run_context() -> dict[str, Any]:
@@ -25,11 +32,7 @@ def _github_run_context() -> dict[str, Any]:
     repository = os.getenv("GITHUB_REPOSITORY", "")
     run_id = os.getenv("GITHUB_RUN_ID", "")
     run_attempt = os.getenv("GITHUB_RUN_ATTEMPT", "")
-
-    run_url = ""
-    if repository and run_id:
-        run_url = f"{server_url}/{repository}/actions/runs/{run_id}"
-
+    run_url = f"{server_url}/{repository}/actions/runs/{run_id}" if repository and run_id else ""
     return {
         "github_run_id": run_id or None,
         "github_run_attempt": run_attempt or None,
@@ -41,187 +44,209 @@ def _github_run_context() -> dict[str, Any]:
     }
 
 
-def _append_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
-    if not rows:
-        return
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8") as f:
-        for row in rows:
-            f.write(json.dumps(row, ensure_ascii=False, default=str))
-            f.write("\n")
+def _config_snapshot(config: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": config.get("id"),
+        "name": config.get("name"),
+        "scraper": config.get("type"),
+        "enabled": config.get("enabled"),
+        "priority": config.get("priority"),
+        "source_type": config.get("source_type"),
+        "sub_source_type": config.get("sub_source_type"),
+        "item_type": config.get("item_type"),
+        "input_schema_version": config.get("input_schema_version"),
+        "input": config.get("config") or {},
+    }
 
 
-def _create_log(
-    client: SupabaseRestClient,
-    config: dict[str, Any],
-    snapshot_date: str,
-    run_context: dict[str, Any],
-) -> str | None:
-    return client.create_scraper_log(
-        {
-            "scraper_config_id": config.get("id"),
-            "snapshot_date": snapshot_date,
-            "github_run_id": run_context.get("github_run_id"),
-            "config_snapshot": {
-                "id": config.get("id"),
-                "name": config.get("name"),
-                "scraper": config.get("type"),
-                "enabled": config.get("enabled"),
-                "priority": config.get("priority"),
-                "source_type": config.get("source_type"),
-                "sub_source_type": config.get("sub_source_type"),
-                "item_type": config.get("item_type"),
-                "input": config.get("config") or {},
-            },
-            "status": "running",
-            "result": run_context,
-            "error_logs": [],
-        }
-    )
-
-
-def _update_log_safe(
-    client: SupabaseRestClient,
-    log_id: str | None,
-    payload: dict[str, Any],
-) -> None:
-    if not log_id:
+def _update_task_safe(client: SupabaseRestClient, task_id: str | None, payload: dict[str, Any]) -> None:
+    if not task_id:
         return
     try:
-        client.update_scraper_log(log_id, payload)
+        client.update_scrape_task(task_id, payload)
     except Exception as exc:
-        print(f"  ⚠️ 更新 scraper log 失败: {exc}")
+        print(f"  ⚠️ update scrape task failed: {exc}")
 
 
-def _write_rows_to_rds(rows: list[dict[str, Any]]) -> int:
-    records = [RawItemRecord.from_mapping(row) for row in rows]
-    if not records:
-        return 0
-    with OctopusDao.from_env() as dao:
-        return dao.raw_items.upsert_many(records)
+def _update_run_safe(client: SupabaseRestClient, run_id: str | None, payload: dict[str, Any]) -> None:
+    if not run_id:
+        return
+    try:
+        client.update_scrape_run(run_id, payload)
+    except Exception as exc:
+        print(f"  ⚠️ update scrape run failed: {exc}")
 
 
 def run_global_scrape(args: argparse.Namespace) -> int:
     client = SupabaseRestClient.from_env()
     run_context = _github_run_context()
-    supported_types = list_types()
-    configs, skipped = split_supported_configs(
-        load_enabled_runtime_configs(client),
-        supported_types,
-    )
+    configs, skipped = split_supported_configs(load_enabled_runtime_configs(client), list_types())
 
     print(f"loaded enabled configs: runnable={len(configs)}, skipped={len(skipped)}")
     if skipped:
         skipped_names = ", ".join(f"{c['name']}({c['type']})" for c in skipped)
         print(f"skipped unsupported scraper configs: {skipped_names}")
 
-    output_path = Path(args.output) if args.output else None
-    if output_path and output_path.exists():
-        output_path.unlink()
+    output_sink = JsonlSink(Path(args.output)) if args.output else None
+    if output_sink:
+        output_sink.reset()
+    rds_sink = RdsSink() if args.write_rds else None
+
+    run_id = client.create_scrape_run(
+        {
+            "snapshot_date": args.date,
+            "trigger_type": "github_action" if run_context.get("github_run_id") else "manual",
+            "trigger_ref": run_context.get("github_run_url"),
+            "status": "running",
+            "summary": {**run_context, "skipped_unsupported": len(skipped)},
+        }
+    )
 
     total_items = 0
-    total_affected = 0
+    total_written = 0
     failed = 0
 
     for config in configs:
         print(f"running scraper: {config['name']} [{config['type']}]")
         started = time.monotonic()
-        log_id = _create_log(client, config, args.date, run_context)
+        task_id = client.create_scrape_task(
+            {
+                "run_id": run_id,
+                "scraper_config_id": config.get("id"),
+                "snapshot_date": args.date,
+                "scraper": config.get("type"),
+                "sub_source_type": config.get("sub_source_type"),
+                "status": "running",
+                "stage": "validate_config",
+                "config_snapshot": _config_snapshot(config),
+            }
+        )
 
         try:
-            rows = run_scrapers([config], args.date)
-            affected = _write_rows_to_rds(rows) if args.write_rds else 0
-            if output_path:
-                _append_jsonl(output_path, rows)
+            _update_task_safe(client, task_id, {"stage": "discover"})
+            state = client.fetch_scraper_state(str(config.get("id"))) if config.get("id") else {}
+            result = run_config(config, args.date, run_id=run_id, task_id=task_id, state=state)
 
-            duration_ms = int((time.monotonic() - started) * 1000)
-            total_items += len(rows)
-            total_affected += affected
-            print(
-                f"scraper complete: {config['name']} items={len(rows)} "
-                f"affected={affected} duration_ms={duration_ms}"
+            _update_task_safe(
+                client,
+                task_id,
+                {
+                    "stage": "sink",
+                    "items_discovered": result.items_discovered,
+                    "items_filtered": result.items_filtered,
+                    "items_enriched": result.items_enriched,
+                },
             )
 
-            _update_log_safe(
+            written = 0
+            if output_sink:
+                output_sink.write(result.rows)
+            if rds_sink:
+                written = rds_sink.write(result.rows)
+
+            duration_ms = int((time.monotonic() - started) * 1000)
+            total_items += len(result.rows)
+            total_written += written
+
+            if config.get("id"):
+                client.upsert_scraper_state(
+                    {
+                        "scraper_config_id": config.get("id"),
+                        "state": result.state or {},
+                        "last_success_snapshot_date": args.date,
+                        "last_success_run_id": run_id,
+                    }
+                )
+
+            _update_task_safe(
                 client,
-                log_id,
+                task_id,
                 {
                     "status": "success",
+                    "stage": "done",
+                    "items_written": written,
                     "duration_ms": duration_ms,
-                    "result": {
-                        **run_context,
-                        "items_count": len(rows),
-                        "raw_items_affected": affected,
-                        "write_rds": bool(args.write_rds),
-                        "output_path": str(output_path) if output_path else None,
-                    },
                     "error_message": None,
                     "error_logs": [],
                 },
+            )
+            print(
+                f"scraper complete: {config['name']} items={len(result.rows)} "
+                f"written={written} duration_ms={duration_ms}"
             )
         except Exception as exc:
             duration_ms = int((time.monotonic() - started) * 1000)
             failed += 1
             print(f"scraper failed: {config['name']} [{config['type']}] {exc}")
-            _update_log_safe(
+            _update_task_safe(
                 client,
-                log_id,
+                task_id,
                 {
                     "status": "failed",
                     "duration_ms": duration_ms,
-                    "result": {
-                        **run_context,
-                        "items_count": 0,
-                        "raw_items_affected": 0,
-                        "write_rds": bool(args.write_rds),
-                    },
                     "error_message": str(exc),
-                    "error_logs": [
-                        {
-                            "type": exc.__class__.__name__,
-                            "message": str(exc),
-                        }
-                    ],
+                    "error_logs": [{"type": exc.__class__.__name__, "message": str(exc)}],
                 },
             )
-            if not args.continue_on_error:
+            if args.fail_fast or not args.continue_on_error:
+                _update_run_safe(
+                    client,
+                    run_id,
+                    {
+                        "status": "failed",
+                        "finished_at": _utc_now_iso(),
+                        "summary": {
+                            **run_context,
+                            "configs": len(configs),
+                            "skipped": len(skipped),
+                            "failed": failed,
+                            "items": total_items,
+                            "written": total_written,
+                        },
+                    },
+                )
                 raise
 
+    status = "success" if failed == 0 else "partial"
+    summary = {
+        **run_context,
+        "configs": len(configs),
+        "skipped": len(skipped),
+        "failed": failed,
+        "items": total_items,
+        "written": total_written,
+        "write_rds": bool(args.write_rds),
+        "output_path": str(args.output) if args.output else None,
+    }
+    _update_run_safe(
+        client,
+        run_id,
+        {
+            "status": status,
+            "finished_at": _utc_now_iso(),
+            "summary": summary,
+        },
+    )
     print(
         "global scrape summary: "
         f"configs={len(configs)} skipped={len(skipped)} failed={failed} "
-        f"items={total_items} affected={total_affected}"
+        f"items={total_items} written={total_written}"
     )
     return 1 if failed and args.fail_on_error else 0
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run all enabled Octopus scraper configs")
-    parser.add_argument(
-        "--date",
-        default=date.today().isoformat(),
-        help="Snapshot date, e.g. 2026-06-07",
-    )
+    parser.add_argument("--date", default=date.today().isoformat(), help="Snapshot date, e.g. 2026-06-07")
     parser.add_argument(
         "--output",
         default="outputs/global_scrape/raw_items.jsonl",
         help="Optional JSONL output path for fetched raw_items rows.",
     )
-    parser.add_argument(
-        "--write-rds",
-        action="store_true",
-        help="Write crawler output to Aliyun RDS MySQL using OCTOPUS_RDS_* env vars.",
-    )
-    parser.add_argument(
-        "--continue-on-error",
-        action="store_true",
-        help="Continue running remaining configs after a scraper failure.",
-    )
-    parser.add_argument(
-        "--fail-on-error",
-        action="store_true",
-        help="Exit non-zero after all configs finish if any scraper failed.",
-    )
+    parser.add_argument("--write-rds", action="store_true", help="Write crawler output to Aliyun RDS MySQL.")
+    parser.add_argument("--continue-on-error", action="store_true", help="Continue after scraper failure.")
+    parser.add_argument("--fail-on-error", action="store_true", help="Exit non-zero after all configs finish if failed.")
+    parser.add_argument("--fail-fast", action="store_true", help="Stop immediately on first scraper failure.")
     return parser
 
 

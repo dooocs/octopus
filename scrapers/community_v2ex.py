@@ -3,6 +3,7 @@
 import re
 import requests
 from datetime import datetime, timezone
+from infra.http import http_get
 from infra.models import BaseScraper, RawItem
 from scrapers.registry import register
 
@@ -19,7 +20,7 @@ def _clean_html(text: str) -> str:
 
 def _fetch_replies(topic_id: int, max_fetch: int) -> list[dict]:
     try:
-        resp = requests.get(V2EX_REPLIES_API, params={"topic_id": topic_id, "p": 1}, headers=HEADERS, timeout=10)
+        resp = http_get(V2EX_REPLIES_API, params={"topic_id": topic_id, "p": 1}, headers=HEADERS, timeout=10)
         if resp.status_code != 200:
             return []
         replies = resp.json()
@@ -57,7 +58,7 @@ class V2EXEngine(BaseScraper):
         source_tag = self.config.get("source_tag", "dev_community")
 
         try:
-            resp = requests.get(V2EX_HOT_API, headers=HEADERS, timeout=15)
+            resp = http_get(V2EX_HOT_API, headers=HEADERS, timeout=15)
             if resp.status_code != 200:
                 return []
             topics = resp.json()
@@ -71,7 +72,7 @@ class V2EXEngine(BaseScraper):
         for i, t in enumerate(topics[:top_n]):
             url = t.get("url") or f"https://www.v2ex.com/t/{t['id']}"
             try:
-                page = requests.get(url, headers=HEADERS, timeout=10)
+                page = http_get(url, headers=HEADERS, timeout=10)
                 match = re.search(r'(\d+)\s*次点击', page.text) if page.status_code == 200 else None
                 t["_clicks"] = int(match.group(1)) if match else 0
             except Exception:

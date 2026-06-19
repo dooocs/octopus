@@ -4,6 +4,7 @@ import os
 import time
 import requests
 from datetime import datetime, timezone, timedelta
+from infra.http import http_post
 from infra.models import BaseScraper, RawItem
 from scrapers.registry import register
 
@@ -61,7 +62,7 @@ def _retry_post(url: str, json_body: dict, headers: dict, max_retries: int = 3) 
     """指数退避重试：1s / 3s / 9s"""
     for attempt in range(max_retries):
         try:
-            resp = requests.post(url, json=json_body, headers=headers, timeout=20)
+            resp = http_post(url, json=json_body, headers=headers, timeout=20)
             if resp.status_code in (429, 500, 502, 503, 504):
                 if attempt < max_retries - 1:
                     wait = 3 ** attempt

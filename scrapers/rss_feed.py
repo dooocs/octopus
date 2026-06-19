@@ -4,6 +4,7 @@ import re
 import requests
 import feedparser
 from datetime import datetime, timezone, timedelta
+from infra.http import http_get
 from infra.models import BaseScraper, RawItem
 from scrapers.registry import register
 
@@ -52,7 +53,7 @@ class RSSFeedEngine(BaseScraper):
         content_type = self.config.get("content_type", "article")
 
         try:
-            resp = requests.get(url, timeout=15, headers=HEADERS)
+            resp = http_get(url, timeout=15, headers=HEADERS)
             if resp.status_code != 200:
                 print(f"  ⚠️ [{self.name}] HTTP {resp.status_code}")
                 return []

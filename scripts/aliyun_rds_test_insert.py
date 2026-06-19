@@ -4,7 +4,11 @@ import hashlib
 import os
 from datetime import datetime, timezone
 
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+except ImportError:  # pragma: no cover
+    def load_dotenv() -> None:
+        return None
 
 from infra.dao import OctopusDao, RawItemRecord
 

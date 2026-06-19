@@ -1,0 +1,177 @@
+from __future__ import annotations
+
+import json
+import tempfile
+import unittest
+from pathlib import Path
+from typing import Any
+
+from core.contracts import ChannelSpec, InputConfig, RawItem, RunContext, ScraperConfig, SourceRecord
+from core.registry import export_specs, register_adapter
+from core.runner import run_config
+from pipeline.sinks import JsonlSink
+from scripts.migrate_scraper_configs_v1 import convert_flat_input, migrate_row
+
+
+class InputConfigContractTest(unittest.TestCase):
+    def test_input_config_requires_exact_five_top_level_keys(self) -> None:
+        valid = {"source": {}, "fetch": {}, "filters": {}, "enrich": [], "runtime": {}}
+        self.assertEqual(InputConfig.from_mapping(valid).to_dict(), valid)
+
+        with self.assertRaises(ValueError):
+            InputConfig.from_mapping({"source": {}, "fetch": {}, "filters": {}, "runtime": {}})
+
+        with self.assertRaises(ValueError):
+            InputConfig.from_mapping({**valid, "output_fields": []})
+
+
+class RawItemContractTest(unittest.TestCase):
+    def test_raw_item_id_prefers_native_identity(self) -> None:
+        first = RawItem(
+            title="Demo",
+            original_url="https://example.com/a",
+            source_type="website",
+            item_type="article",
+            scraper_slug="example",
+            identity="native-1",
+        )
+        second = RawItem(
+            title="Demo",
+            original_url="https://example.com/b",
+            source_type="website",
+            item_type="article",
+            scraper_slug="example",
+            identity="native-1",
+        )
+
+        self.assertEqual(first.id, second.id)
+        self.assertEqual(first.to_output_dict()["extra"], {"native_id": "native-1"})
+
+
+class SpecExportTest(unittest.TestCase):
+    def test_exported_specs_exclude_unimplemented_twitter_nitter(self) -> None:
+        scrapers = {item["scraper"] for item in export_specs()}
+
+        self.assertIn("github_search", scrapers)
+        self.assertIn("hackernews", scrapers)
+        self.assertNotIn("twitter_nitter", scrapers)
+
+
+class MigrationContractTest(unittest.TestCase):
+    def test_convert_flat_github_search_input_to_five_part_input(self) -> None:
+        converted = convert_flat_input(
+            "github_search",
+            {
+                "queries": [{"q": "topic:ai stars:>100", "label": "ai"}],
+                "per_page": 30,
+                "fetch_window_days": 7,
+                "min_stars": 100,
+            },
+        )
+
+        self.assertEqual(set(converted.keys()), {"source", "fetch", "filters", "enrich", "runtime"})
+        self.assertEqual(converted["source"]["queries"][0]["label"], "ai")
+        self.assertEqual(converted["filters"], {"min_stars": 100})
+
+    def test_migrate_row_reports_unsupported_scraper(self) -> None:
+        result = migrate_row(
+            {
+                "id": "11111111-1111-1111-1111-111111111111",
+                "name": "Legacy Twitter",
+                "scraper": "twitter_nitter",
+                "input": {"twitter_user": "example"},
+            }
+        )
+
+        self.assertEqual(result.status, "unsupported")
+
+
+@register_adapter
+class _TestAdapter:
+    spec = ChannelSpec(
+        scraper="unit_test_adapter",
+        label="Unit Test",
+        group="Test",
+        default_source_type="test",
+        default_item_type="article",
+        input_schema_version=1,
+        input_schema={
+            "type": "object",
+            "required": ["source", "fetch", "filters", "enrich", "runtime"],
+            "additionalProperties": False,
+            "properties": {
+                "source": {"type": "object", "additionalProperties": False, "properties": {}},
+                "fetch": {"type": "object", "additionalProperties": False, "properties": {}},
+                "filters": {"type": "object", "additionalProperties": False, "properties": {}},
+                "enrich": {"type": "array", "items": {"type": "object"}},
+                "runtime": {"type": "object", "additionalProperties": False, "properties": {}},
+            },
+        },
+        default_input={"source": {}, "fetch": {}, "filters": {}, "enrich": [], "runtime": {}},
+    )
+
+    def discover(self, ctx: RunContext, config: ScraperConfig) -> list[SourceRecord]:
+        return [
+            SourceRecord(
+                identity="native-1",
+                url="https://example.com/item",
+                title="Example",
+                content="Body",
+                metrics={"score": 1},
+            )
+        ]
+
+    def enrich(
+        self,
+        ctx: RunContext,
+        records: list[SourceRecord],
+        config: ScraperConfig,
+    ) -> list[SourceRecord]:
+        return records
+
+    def normalize(self, ctx: RunContext, record: SourceRecord, config: ScraperConfig) -> RawItem:
+        return RawItem(
+            title=record.title,
+            original_url=record.url,
+            source_type=config.source_type,
+            item_type=config.item_type,
+            identity=record.identity,
+            body_text=record.content,
+            raw_metrics=record.metrics,
+        )
+
+
+class RunnerContractTest(unittest.TestCase):
+    def test_run_config_returns_valid_rows(self) -> None:
+        result = run_config(
+            {
+                "type": "unit_test_adapter",
+                "name": "Unit",
+                "enabled": True,
+                "source_type": "test",
+                "sub_source_type": "unit",
+                "item_type": "article",
+                "config": {"source": {}, "fetch": {}, "filters": {}, "enrich": [], "runtime": {}},
+            },
+            "2026-06-19",
+        )
+
+        self.assertEqual(result.items_discovered, 1)
+        self.assertEqual(result.rows[0]["sub_source_type"], "unit")
+        self.assertEqual(result.rows[0]["metrics"], {"score": 1})
+
+
+class SinkContractTest(unittest.TestCase):
+    def test_jsonl_sink_writes_rows(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = Path(tmpdir) / "rows.jsonl"
+            sink = JsonlSink(path)
+
+            written = sink.write([{"id": "abc", "title": "Demo"}])
+
+            self.assertEqual(written, 1)
+            self.assertEqual(json.loads(path.read_text(encoding="utf-8")), {"id": "abc", "title": "Demo"})
+
+
+if __name__ == "__main__":
+    unittest.main()

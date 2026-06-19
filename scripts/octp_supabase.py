@@ -4,10 +4,13 @@ import json
 import os
 from typing import Any, Iterable
 
-import requests
+from infra.http import http_get, http_patch, http_post
 
 CONFIG_TABLE = "octp_scraper_configs"
 LOG_TABLE = "octp_scraper_logs"
+RUN_TABLE = "octp_scrape_runs"
+TASK_TABLE = "octp_scrape_tasks"
+STATE_TABLE = "octp_scraper_state"
 
 
 def _clean_base_url(url: str) -> str:
@@ -56,6 +59,7 @@ def runtime_config_from_row(row: dict[str, Any]) -> dict[str, Any]:
         "source_type": str(source_type),
         "sub_source_type": str(sub_source_type),
         "item_type": str(item_type),
+        "input_schema_version": int(row.get("input_schema_version") or 1),
         "config": _json_object(row.get("input"), field_name="input"),
     }
 
@@ -103,7 +107,7 @@ class SupabaseRestClient:
         return f"{self.url}/rest/v1/{table_name}"
 
     def fetch_enabled_config_rows(self) -> list[dict[str, Any]]:
-        response = requests.get(
+        response = http_get(
             self._table_url(CONFIG_TABLE),
             headers=self.headers,
             params={
@@ -119,8 +123,119 @@ class SupabaseRestClient:
             raise TypeError("Supabase config response must be a JSON array")
         return data
 
+    def fetch_config_rows(self) -> list[dict[str, Any]]:
+        response = http_get(
+            self._table_url(CONFIG_TABLE),
+            headers=self.headers,
+            params={
+                "select": "*",
+                "order": "priority.asc,name.asc",
+            },
+            timeout=30,
+        )
+        response.raise_for_status()
+        data = response.json()
+        if not isinstance(data, list):
+            raise TypeError("Supabase config response must be a JSON array")
+        return data
+
+    def update_scraper_config_input(
+        self,
+        config_id: str,
+        *,
+        input_value: dict[str, Any],
+        input_schema_version: int,
+    ) -> None:
+        response = http_patch(
+            self._table_url(CONFIG_TABLE),
+            headers={**self.headers, "Prefer": "return=minimal"},
+            params={"id": f"eq.{config_id}"},
+            json={"input": input_value, "input_schema_version": input_schema_version},
+            timeout=30,
+        )
+        response.raise_for_status()
+
+    def create_scrape_run(self, payload: dict[str, Any]) -> str | None:
+        response = http_post(
+            self._table_url(RUN_TABLE),
+            headers={**self.headers, "Prefer": "return=representation"},
+            json=payload,
+            timeout=30,
+        )
+        response.raise_for_status()
+        data = response.json()
+        if isinstance(data, list) and data:
+            run_id = data[0].get("id")
+            return str(run_id) if run_id else None
+        return None
+
+    def update_scrape_run(self, run_id: str, payload: dict[str, Any]) -> None:
+        response = http_patch(
+            self._table_url(RUN_TABLE),
+            headers={**self.headers, "Prefer": "return=minimal"},
+            params={"id": f"eq.{run_id}"},
+            json=payload,
+            timeout=30,
+        )
+        response.raise_for_status()
+
+    def create_scrape_task(self, payload: dict[str, Any]) -> str | None:
+        response = http_post(
+            self._table_url(TASK_TABLE),
+            headers={**self.headers, "Prefer": "return=representation"},
+            json=payload,
+            timeout=30,
+        )
+        response.raise_for_status()
+        data = response.json()
+        if isinstance(data, list) and data:
+            task_id = data[0].get("id")
+            return str(task_id) if task_id else None
+        return None
+
+    def update_scrape_task(self, task_id: str, payload: dict[str, Any]) -> None:
+        response = http_patch(
+            self._table_url(TASK_TABLE),
+            headers={**self.headers, "Prefer": "return=minimal"},
+            params={"id": f"eq.{task_id}"},
+            json=payload,
+            timeout=30,
+        )
+        response.raise_for_status()
+
+    def fetch_scraper_state(self, config_id: str) -> dict[str, Any]:
+        response = http_get(
+            self._table_url(STATE_TABLE),
+            headers=self.headers,
+            params={
+                "select": "state",
+                "scraper_config_id": f"eq.{config_id}",
+                "limit": "1",
+            },
+            timeout=30,
+        )
+        response.raise_for_status()
+        data = response.json()
+        if isinstance(data, list) and data:
+            state = data[0].get("state")
+            return state if isinstance(state, dict) else {}
+        return {}
+
+    def upsert_scraper_state(self, payload: dict[str, Any]) -> None:
+        response = http_post(
+            self._table_url(STATE_TABLE),
+            headers={
+                **self.headers,
+                "Prefer": "resolution=merge-duplicates,return=minimal",
+            },
+            params={"on_conflict": "scraper_config_id"},
+            json=payload,
+            timeout=30,
+        )
+        response.raise_for_status()
+
     def create_scraper_log(self, payload: dict[str, Any]) -> str | None:
-        response = requests.post(
+        response = http_post(
             self._table_url(LOG_TABLE),
             headers={**self.headers, "Prefer": "return=representation"},
             json=payload,
@@ -134,7 +249,7 @@ class SupabaseRestClient:
         return None
 
     def update_scraper_log(self, log_id: str, payload: dict[str, Any]) -> None:
-        response = requests.patch(
+        response = http_patch(
             self._table_url(LOG_TABLE),
             headers={**self.headers, "Prefer": "return=minimal"},
             params={"id": f"eq.{log_id}"},

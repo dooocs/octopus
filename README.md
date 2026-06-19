@@ -8,6 +8,10 @@ The current schema discussion lives in:
 
 - [docs/raw-items-output-schema.html](docs/raw-items-output-schema.html)
 
+The crawler foundation refactor plan lives in:
+
+- [docs/octopus-crawler-foundation.md](docs/octopus-crawler-foundation.md)
+
 ## Migrated Scrapers
 
 The initial crawler engines were migrated from `ahaIndexSync` without moving the

@@ -4,6 +4,7 @@ import os
 import re
 import requests
 from datetime import datetime, timedelta
+from infra.http import http_get
 from infra.models import BaseScraper, RawItem
 from infra.oss import upload_images_to_oss, upload_image_to_oss
 from scrapers.registry import register
@@ -59,7 +60,7 @@ def _fetch_readme_raw(owner: str, repo: str, token: str) -> str:
         headers = {"Accept": "application/vnd.github.raw"}
         if token:
             headers["Authorization"] = f"token {token}"
-        resp = requests.get(
+        resp = http_get(
             f"https://api.github.com/repos/{owner}/{repo}/readme",
             headers=headers, timeout=10,
         )
@@ -75,7 +76,7 @@ def _fetch_languages(owner: str, repo: str, token: str) -> str:
         headers = {"Accept": "application/vnd.github+json"}
         if token:
             headers["Authorization"] = f"token {token}"
-        resp = requests.get(
+        resp = http_get(
             f"https://api.github.com/repos/{owner}/{repo}/languages",
             headers=headers, timeout=10,
         )
@@ -123,7 +124,7 @@ class GitHubSearchEngine(BaseScraper):
             label = query_cfg["label"]
 
             try:
-                res = requests.get(
+                res = http_get(
                     "https://api.github.com/search/repositories",
                     headers=headers,
                     params={"q": q, "sort": "stars", "order": "desc", "per_page": per_page},

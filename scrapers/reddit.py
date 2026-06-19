@@ -3,6 +3,7 @@
 import time
 import requests
 from datetime import datetime, timezone
+from infra.http import http_get
 from infra.models import BaseScraper, RawItem
 from scrapers.registry import register
 
@@ -14,7 +15,7 @@ def _retry_get(url: str, params: dict, headers: dict, max_retries: int = 3) -> r
     """指数退避重试：1s / 3s / 9s"""
     for attempt in range(max_retries):
         try:
-            resp = requests.get(url, params=params, headers=headers, timeout=15)
+            resp = http_get(url, params=params, headers=headers, timeout=15)
             if resp.status_code in (429, 500, 502, 503, 504):
                 if attempt < max_retries - 1:
                     wait = 3 ** attempt

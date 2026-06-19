@@ -4,6 +4,7 @@
 import time
 import requests
 from datetime import datetime, timezone, timedelta
+from infra.http import http_get
 from infra.models import BaseScraper, RawItem
 from infra.oss import upload_image_to_oss
 from scrapers.registry import register
@@ -27,7 +28,7 @@ def _retry_get(url: str, params: dict, max_retries: int = 3, timeout: int = 15) 
     headers = {"User-Agent": USER_AGENT}
     for attempt in range(max_retries):
         try:
-            resp = requests.get(url, params=params, headers=headers, timeout=timeout)
+            resp = http_get(url, params=params, headers=headers, timeout=timeout)
             if resp.status_code in (429, 500, 502, 503, 504):
                 if attempt < max_retries - 1:
                     wait = 3 ** attempt

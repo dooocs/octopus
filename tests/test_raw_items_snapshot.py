@@ -48,8 +48,8 @@ class RawItemsSnapshotSyncTest(unittest.TestCase):
         self.assertIsNone(normalized["extra"])
         self.assertEqual(normalized["scrape_config_snapshot"], {"max_items": 5})
 
-    @patch("scripts.sync_raw_items_snapshot.requests.post")
-    @patch("scripts.sync_raw_items_snapshot.requests.delete")
+    @patch("scripts.sync_raw_items_snapshot.http_post")
+    @patch("scripts.sync_raw_items_snapshot.http_delete")
     def test_replace_rows_deletes_then_inserts_chunks(
         self,
         mock_delete: Mock,

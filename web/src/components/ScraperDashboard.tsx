@@ -64,6 +64,7 @@ function rowToRuntimeConfig(row: ScraperConfigRow) {
     source_type: row.source_type,
     sub_source_type: row.sub_source_type,
     item_type: row.item_type,
+    input_schema_version: row.input_schema_version || 1,
     config: row.input
   }
 }
@@ -107,6 +108,10 @@ function channelFromConfig(row: ScraperConfigRow): ScraperChannel {
     itemType: row.item_type,
     description: '从现有配置迁移的抓取器。',
     defaultInput: {},
+    inputSchemaVersion: row.input_schema_version || 1,
+    inputSchema: {},
+    requiredSecrets: [],
+    supportedEnrichers: [],
     hint: '{ ...input }'
   }
 }

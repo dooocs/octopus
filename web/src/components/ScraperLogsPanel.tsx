@@ -224,7 +224,7 @@ export default function ScraperLogsPanel({ configs }: ScraperLogsPanelProps) {
 
   function logScraper(row: ScraperLogRow) {
     const config = row.scraper_config_id ? configsById.get(row.scraper_config_id) : undefined
-    return readText(row.config_snapshot, 'scraper') || config?.scraper || 'unknown'
+    return row.scraper || readText(row.config_snapshot, 'scraper') || config?.scraper || 'unknown'
   }
 
   return (
@@ -273,8 +273,8 @@ export default function ScraperLogsPanel({ configs }: ScraperLogsPanelProps) {
             logs.map((row) => {
               const result = row.result || {}
               const runUrl = readText(result, 'github_run_url')
-              const itemCount = readNumber(result, 'items_count')
-              const affectedCount = readNumber(result, 'raw_items_affected')
+              const itemCount = row.items_enriched ?? row.items_discovered ?? readNumber(result, 'items_count')
+              const writtenCount = row.items_written ?? readNumber(result, 'raw_items_affected')
 
               return (
                 <article className={`log-row log-row-${row.status}`} key={row.id}>
@@ -294,8 +294,9 @@ export default function ScraperLogsPanel({ configs }: ScraperLogsPanelProps) {
                         {formatDuration(row.duration_ms)}
                       </span>
                       {itemCount !== null ? <span>{itemCount} items</span> : null}
-                      {affectedCount !== null ? <span>{affectedCount} affected</span> : null}
+                      {writtenCount !== null ? <span>{writtenCount} written</span> : null}
                       {row.github_run_id ? <span>run {row.github_run_id}</span> : null}
+                      {row.stage ? <span>{row.stage}</span> : null}
                     </div>
                     {row.error_message ? <div className="log-error-message">{row.error_message}</div> : null}
                     <details className="log-details">
@@ -306,7 +307,12 @@ export default function ScraperLogsPanel({ configs }: ScraperLogsPanelProps) {
                       <pre>
                         {formatJson({
                           config_snapshot: row.config_snapshot,
-                          result: row.result,
+                          stage: row.stage ?? null,
+                          items_discovered: row.items_discovered ?? null,
+                          items_filtered: row.items_filtered ?? null,
+                          items_enriched: row.items_enriched ?? null,
+                          items_written: row.items_written ?? null,
+                          result: row.result || {},
                           error_logs: row.error_logs
                         })}
                       </pre>

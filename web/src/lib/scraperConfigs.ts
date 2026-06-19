@@ -40,6 +40,7 @@ export async function saveScraperConfig(draft: ScraperConfigDraft) {
     source_type: draft.source_type,
     sub_source_type: draft.sub_source_type,
     item_type: draft.item_type,
+    input_schema_version: draft.input_schema_version,
     input: draft.input
   }
 

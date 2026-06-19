@@ -7,8 +7,12 @@ from collections.abc import Iterable, Iterator
 from datetime import date, datetime
 from typing import Any
 
-import requests
-from dotenv import load_dotenv
+from infra.http import http_delete, http_post
+try:
+    from dotenv import load_dotenv
+except ImportError:  # pragma: no cover
+    def load_dotenv() -> None:
+        return None
 
 from infra.dao.base import RdsConfig
 from infra.dao.raw_items import RawItemsDao
@@ -126,7 +130,7 @@ class SupabaseSnapshotClient:
         return f"{self.url}/rest/v1/{table_name}"
 
     def replace_rows(self, rows: Iterable[dict[str, Any]], *, chunk_size: int) -> int:
-        delete_response = requests.delete(
+        delete_response = http_delete(
             self._table_url(SNAPSHOT_TABLE),
             headers={**self.headers, "Prefer": "return=minimal"},
             params={"id": "not.is.null"},
@@ -150,7 +154,7 @@ class SupabaseSnapshotClient:
         return inserted
 
     def _insert_chunk(self, rows: list[dict[str, Any]]) -> None:
-        response = requests.post(
+        response = http_post(
             self._table_url(SNAPSHOT_TABLE),
             headers={**self.headers, "Prefer": "return=minimal"},
             json=rows,

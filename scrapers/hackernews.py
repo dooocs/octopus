@@ -4,6 +4,7 @@ import requests
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone, timedelta
+from infra.http import http_get
 from infra.models import BaseScraper, RawItem
 from scrapers.registry import register
 
@@ -33,7 +34,7 @@ def _fetch_body(url: str, skip_domains: list[str]) -> str:
     if "news.ycombinator.com" in url:
         return ""
     try:
-        resp = requests.get(url, timeout=10, headers=HEADERS)
+        resp = http_get(url, timeout=10, headers=HEADERS)
         if resp.status_code != 200:
             return ""
         with _trafilatura_lock:
@@ -57,7 +58,7 @@ class HackerNewsEngine(BaseScraper):
         items = []
 
         try:
-            resp = requests.get(f"{HN_API}/newstories.json", timeout=15)
+            resp = http_get(f"{HN_API}/newstories.json", timeout=15)
             resp.raise_for_status()
             story_ids = resp.json()[:new_n]
 
@@ -91,7 +92,7 @@ class HackerNewsEngine(BaseScraper):
 
     def _fetch_story(self, story_id: int, seen: set, cutoff: datetime, min_score: int):
         try:
-            r = requests.get(f"{HN_API}/item/{story_id}.json", timeout=10)
+            r = http_get(f"{HN_API}/item/{story_id}.json", timeout=10)
             r.raise_for_status()
             story = r.json()
             if not story or story.get("type") != "story":

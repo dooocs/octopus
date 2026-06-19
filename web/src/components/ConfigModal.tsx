@@ -30,6 +30,27 @@ function slugify(value: string) {
     .replace(/^_+|_+$/g, '')
 }
 
+function validateFivePartInput(value: Record<string, JsonValue>) {
+  const keys = Object.keys(value).sort()
+  const expected = ['enrich', 'fetch', 'filters', 'runtime', 'source']
+  if (keys.length !== expected.length || keys.some((key, index) => key !== expected[index])) {
+    return 'Input 必须只包含 source、fetch、filters、enrich、runtime 五个一级 key'
+  }
+
+  for (const key of ['source', 'fetch', 'filters', 'runtime']) {
+    const section = value[key]
+    if (!section || typeof section !== 'object' || Array.isArray(section)) {
+      return `${key} 必须是 JSON object`
+    }
+  }
+
+  if (!Array.isArray(value.enrich)) {
+    return 'enrich 必须是 JSON array'
+  }
+
+  return ''
+}
+
 export default function ConfigModal({
   mode,
   channel,
@@ -105,6 +126,12 @@ export default function ConfigModal({
       return
     }
 
+    const structureError = validateFivePartInput(parsed as Record<string, JsonValue>)
+    if (structureError) {
+      setError(structureError)
+      return
+    }
+
     setSaving(true)
     setError('')
     try {
@@ -117,6 +144,7 @@ export default function ConfigModal({
         source_type: sourceType.trim(),
         sub_source_type: subSourceType.trim(),
         item_type: itemType.trim(),
+        input_schema_version: activeChannel.inputSchemaVersion,
         input: parsed as Record<string, JsonValue>
       })
     } catch (saveError) {

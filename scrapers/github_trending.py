@@ -3,6 +3,7 @@
 import os
 import requests
 from bs4 import BeautifulSoup
+from infra.http import http_get
 from infra.models import BaseScraper, RawItem
 from scrapers.registry import register
 from scrapers.github_search import (
@@ -17,7 +18,7 @@ class GitHubTrendingEngine(BaseScraper):
     def fetch(self) -> list[RawItem]:
         token = os.getenv("GH_MODELS_TOKEN", "")
         try:
-            res = requests.get(
+            res = http_get(
                 "https://github.com/trending",
                 headers={"User-Agent": "Mozilla/5.0"},
                 timeout=self.config.get("timeout", 15),

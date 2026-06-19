@@ -1,0 +1,1440 @@
+[
+  {
+    "scraper": "ai_blog",
+    "label": "AI Blog",
+    "group": "Website",
+    "default_source_type": "website",
+    "default_item_type": "article",
+    "input_schema_version": 1,
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "source",
+        "fetch",
+        "filters",
+        "enrich",
+        "runtime"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "base_url": {
+              "type": "string"
+            },
+            "news_url": {
+              "type": "string"
+            },
+            "link_selector": {
+              "type": "string"
+            },
+            "author": {
+              "type": "string"
+            },
+            "source_tag": {
+              "type": "string"
+            }
+          }
+        },
+        "fetch": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "fetch_window_hours": {
+              "type": "integer"
+            }
+          }
+        },
+        "filters": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {}
+        },
+        "enrich": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "enum": []
+              },
+              "when": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "runtime": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "timeout": {
+              "type": "number",
+              "minimum": 1
+            },
+            "retries": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "concurrency": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "rate_limit": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "default_input": {
+      "source": {
+        "base_url": "",
+        "news_url": "",
+        "link_selector": "a[href*='/news/']"
+      },
+      "fetch": {
+        "fetch_window_hours": 0
+      },
+      "filters": {},
+      "enrich": [],
+      "runtime": {}
+    },
+    "required_secrets": [],
+    "supported_enrichers": [],
+    "rate_limit": {},
+    "description": "抓取 AI 公司新闻页或博客页面。"
+  },
+  {
+    "scraper": "community_linuxdo",
+    "label": "LinuxDo",
+    "group": "Community",
+    "default_source_type": "community",
+    "default_item_type": "discussion",
+    "input_schema_version": 1,
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "source",
+        "fetch",
+        "filters",
+        "enrich",
+        "runtime"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "source_tag": {
+              "type": "string"
+            }
+          }
+        },
+        "fetch": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "top_n": {
+              "type": "integer"
+            },
+            "max_replies_to_fetch": {
+              "type": "integer"
+            }
+          }
+        },
+        "filters": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {}
+        },
+        "enrich": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "enum": [
+                  "top_replies"
+                ]
+              },
+              "when": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "runtime": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "timeout": {
+              "type": "number",
+              "minimum": 1
+            },
+            "retries": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "concurrency": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "rate_limit": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "default_input": {
+      "source": {},
+      "fetch": {
+        "top_n": 10,
+        "max_replies_to_fetch": 30
+      },
+      "filters": {},
+      "enrich": [
+        {
+          "name": "top_replies",
+          "when": "always"
+        }
+      ],
+      "runtime": {}
+    },
+    "required_secrets": [],
+    "supported_enrichers": [
+      "top_replies"
+    ],
+    "rate_limit": {},
+    "description": "抓取 LinuxDo 热门讨论。"
+  },
+  {
+    "scraper": "community_v2ex",
+    "label": "V2EX",
+    "group": "Community",
+    "default_source_type": "community",
+    "default_item_type": "discussion",
+    "input_schema_version": 1,
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "source",
+        "fetch",
+        "filters",
+        "enrich",
+        "runtime"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "source_tag": {
+              "type": "string"
+            }
+          }
+        },
+        "fetch": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "top_n": {
+              "type": "integer"
+            },
+            "max_replies_to_fetch": {
+              "type": "integer"
+            },
+            "max_replies_to_keep": {
+              "type": "integer"
+            }
+          }
+        },
+        "filters": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {}
+        },
+        "enrich": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "enum": [
+                  "top_replies"
+                ]
+              },
+              "when": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "runtime": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "timeout": {
+              "type": "number",
+              "minimum": 1
+            },
+            "retries": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "concurrency": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "rate_limit": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "default_input": {
+      "source": {},
+      "fetch": {
+        "top_n": 10,
+        "max_replies_to_fetch": 30,
+        "max_replies_to_keep": 15
+      },
+      "filters": {},
+      "enrich": [
+        {
+          "name": "top_replies",
+          "when": "always"
+        }
+      ],
+      "runtime": {}
+    },
+    "required_secrets": [],
+    "supported_enrichers": [
+      "top_replies"
+    ],
+    "rate_limit": {},
+    "description": "抓取 V2EX 热门技术讨论。"
+  },
+  {
+    "scraper": "github_search",
+    "label": "GitHub Search",
+    "group": "Code",
+    "default_source_type": "code_host",
+    "default_item_type": "repo",
+    "input_schema_version": 1,
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "source",
+        "fetch",
+        "filters",
+        "enrich",
+        "runtime"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "queries": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "q",
+                  "label"
+                ],
+                "properties": {
+                  "q": {
+                    "type": "string"
+                  },
+                  "label": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "fetch": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "per_page": {
+              "type": "integer"
+            },
+            "fetch_window_days": {
+              "type": "integer"
+            },
+            "max_readme_images": {
+              "type": "integer"
+            },
+            "badge_patterns": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "filters": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "min_stars": {
+              "type": "integer"
+            }
+          }
+        },
+        "enrich": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "enum": [
+                  "github_readme",
+                  "github_languages",
+                  "github_images",
+                  "star_history"
+                ]
+              },
+              "when": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "runtime": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "timeout": {
+              "type": "number",
+              "minimum": 1
+            },
+            "retries": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "concurrency": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "rate_limit": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "default_input": {
+      "source": {
+        "queries": [
+          {
+            "q": "topic:ai stars:>100",
+            "label": "ai"
+          }
+        ]
+      },
+      "fetch": {
+        "per_page": 30,
+        "fetch_window_days": 7
+      },
+      "filters": {
+        "min_stars": 100
+      },
+      "enrich": [
+        {
+          "name": "github_readme",
+          "when": "always"
+        },
+        {
+          "name": "github_languages",
+          "when": "always"
+        },
+        {
+          "name": "github_images",
+          "when": "has_readme"
+        },
+        {
+          "name": "star_history",
+          "when": "always"
+        }
+      ],
+      "runtime": {}
+    },
+    "required_secrets": [
+      "GH_MODELS_TOKEN"
+    ],
+    "supported_enrichers": [
+      "github_readme",
+      "github_languages",
+      "github_images",
+      "star_history"
+    ],
+    "rate_limit": {},
+    "description": "按关键词搜索近期 GitHub 仓库。"
+  },
+  {
+    "scraper": "github_trending",
+    "label": "GitHub Trending",
+    "group": "Code",
+    "default_source_type": "code_host",
+    "default_item_type": "repo",
+    "input_schema_version": 1,
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "source",
+        "fetch",
+        "filters",
+        "enrich",
+        "runtime"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {}
+        },
+        "fetch": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "timeout": {
+              "type": "integer"
+            }
+          }
+        },
+        "filters": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {}
+        },
+        "enrich": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "enum": [
+                  "github_readme",
+                  "github_languages",
+                  "github_images",
+                  "star_history"
+                ]
+              },
+              "when": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "runtime": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "timeout": {
+              "type": "number",
+              "minimum": 1
+            },
+            "retries": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "concurrency": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "rate_limit": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "default_input": {
+      "source": {},
+      "fetch": {
+        "timeout": 15
+      },
+      "filters": {},
+      "enrich": [
+        {
+          "name": "github_readme",
+          "when": "always"
+        },
+        {
+          "name": "github_languages",
+          "when": "always"
+        },
+        {
+          "name": "github_images",
+          "when": "has_readme"
+        },
+        {
+          "name": "star_history",
+          "when": "always"
+        }
+      ],
+      "runtime": {}
+    },
+    "required_secrets": [
+      "GH_MODELS_TOKEN"
+    ],
+    "supported_enrichers": [
+      "github_readme",
+      "github_languages",
+      "github_images",
+      "star_history"
+    ],
+    "rate_limit": {},
+    "description": "抓取 GitHub Trending 仓库榜单。"
+  },
+  {
+    "scraper": "hackernews",
+    "label": "HackerNews",
+    "group": "Community",
+    "default_source_type": "community",
+    "default_item_type": "article",
+    "input_schema_version": 1,
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "source",
+        "fetch",
+        "filters",
+        "enrich",
+        "runtime"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "feed": {
+              "type": "string"
+            }
+          }
+        },
+        "fetch": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "new_n": {
+              "type": "integer"
+            },
+            "cutoff_hours": {
+              "type": "integer"
+            },
+            "fetch_workers": {
+              "type": "integer"
+            },
+            "skip_domains": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "filters": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "min_score": {
+              "type": "integer"
+            }
+          }
+        },
+        "enrich": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "enum": [
+                  "article_body"
+                ]
+              },
+              "when": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "runtime": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "timeout": {
+              "type": "number",
+              "minimum": 1
+            },
+            "retries": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "concurrency": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "rate_limit": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "default_input": {
+      "source": {
+        "feed": "newstories"
+      },
+      "fetch": {
+        "new_n": 100,
+        "cutoff_hours": 36,
+        "fetch_workers": 5,
+        "skip_domains": [
+          "twitter.com",
+          "x.com",
+          "medium.com",
+          "zhihu.com"
+        ]
+      },
+      "filters": {
+        "min_score": 50
+      },
+      "enrich": [
+        {
+          "name": "article_body",
+          "when": "has_external_url"
+        }
+      ],
+      "runtime": {}
+    },
+    "required_secrets": [],
+    "supported_enrichers": [
+      "article_body"
+    ],
+    "rate_limit": {},
+    "description": "抓取 Hacker News 高分新帖。"
+  },
+  {
+    "scraper": "hf_model",
+    "label": "Hugging Face Models",
+    "group": "AI",
+    "default_source_type": "model_hub",
+    "default_item_type": "model",
+    "input_schema_version": 1,
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "source",
+        "fetch",
+        "filters",
+        "enrich",
+        "runtime"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {}
+        },
+        "fetch": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "limit": {
+              "type": "integer"
+            },
+            "max_retries": {
+              "type": "integer"
+            }
+          }
+        },
+        "filters": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "min_likes": {
+              "type": "integer"
+            },
+            "min_downloads": {
+              "type": "integer"
+            },
+            "quant_suffixes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "deriv_suffixes": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "enrich": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "enum": []
+              },
+              "when": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "runtime": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "timeout": {
+              "type": "number",
+              "minimum": 1
+            },
+            "retries": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "concurrency": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "rate_limit": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "default_input": {
+      "source": {},
+      "fetch": {
+        "limit": 3,
+        "max_retries": 3
+      },
+      "filters": {
+        "min_likes": 50,
+        "min_downloads": 1000
+      },
+      "enrich": [],
+      "runtime": {}
+    },
+    "required_secrets": [],
+    "supported_enrichers": [],
+    "rate_limit": {},
+    "description": "抓取 Hugging Face 模型趋势。"
+  },
+  {
+    "scraper": "hf_papers",
+    "label": "Hugging Face Papers",
+    "group": "AI",
+    "default_source_type": "model_hub",
+    "default_item_type": "paper",
+    "input_schema_version": 1,
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "source",
+        "fetch",
+        "filters",
+        "enrich",
+        "runtime"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {}
+        },
+        "fetch": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "top_n": {
+              "type": "integer"
+            },
+            "max_retries": {
+              "type": "integer"
+            }
+          }
+        },
+        "filters": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {}
+        },
+        "enrich": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "enum": []
+              },
+              "when": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "runtime": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "timeout": {
+              "type": "number",
+              "minimum": 1
+            },
+            "retries": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "concurrency": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "rate_limit": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "default_input": {
+      "source": {},
+      "fetch": {
+        "top_n": 3,
+        "max_retries": 3
+      },
+      "filters": {},
+      "enrich": [],
+      "runtime": {}
+    },
+    "required_secrets": [],
+    "supported_enrichers": [],
+    "rate_limit": {},
+    "description": "抓取 Hugging Face Daily Papers。"
+  },
+  {
+    "scraper": "product_hunt",
+    "label": "Product Hunt",
+    "group": "Product",
+    "default_source_type": "product_platform",
+    "default_item_type": "product",
+    "input_schema_version": 1,
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "source",
+        "fetch",
+        "filters",
+        "enrich",
+        "runtime"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "api_token": {
+              "type": "string"
+            }
+          }
+        },
+        "fetch": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "max_retries": {
+              "type": "integer"
+            }
+          }
+        },
+        "filters": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "min_votes": {
+              "type": "integer"
+            },
+            "topic_whitelist": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "topic_blacklist": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "enrich": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "enum": []
+              },
+              "when": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "runtime": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "timeout": {
+              "type": "number",
+              "minimum": 1
+            },
+            "retries": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "concurrency": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "rate_limit": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "default_input": {
+      "source": {},
+      "fetch": {
+        "max_retries": 3
+      },
+      "filters": {
+        "min_votes": 200,
+        "topic_whitelist": [],
+        "topic_blacklist": []
+      },
+      "enrich": [],
+      "runtime": {}
+    },
+    "required_secrets": [
+      "PRODUCTHUNT_TOKEN"
+    ],
+    "supported_enrichers": [],
+    "rate_limit": {},
+    "description": "抓取 Product Hunt 高票新产品。"
+  },
+  {
+    "scraper": "reddit",
+    "label": "Reddit",
+    "group": "Community",
+    "default_source_type": "community",
+    "default_item_type": "discussion",
+    "input_schema_version": 1,
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "source",
+        "fetch",
+        "filters",
+        "enrich",
+        "runtime"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "subreddit": {
+              "type": "string"
+            }
+          }
+        },
+        "fetch": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "max_retries": {
+              "type": "integer"
+            }
+          }
+        },
+        "filters": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "min_score": {
+              "type": "integer"
+            },
+            "skip_nsfw": {
+              "type": "boolean"
+            },
+            "skip_stickied": {
+              "type": "boolean"
+            },
+            "skip_discussion_below": {
+              "type": "integer"
+            },
+            "skip_self_text_below": {
+              "type": "integer"
+            }
+          }
+        },
+        "enrich": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "enum": []
+              },
+              "when": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "runtime": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "timeout": {
+              "type": "number",
+              "minimum": 1
+            },
+            "retries": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "concurrency": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "rate_limit": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "default_input": {
+      "source": {
+        "subreddit": "LocalLLaMA"
+      },
+      "fetch": {},
+      "filters": {
+        "min_score": 50,
+        "skip_nsfw": true,
+        "skip_stickied": true,
+        "skip_discussion_below": 100,
+        "skip_self_text_below": 200
+      },
+      "enrich": [],
+      "runtime": {}
+    },
+    "required_secrets": [],
+    "supported_enrichers": [],
+    "rate_limit": {},
+    "description": "抓取指定 subreddit 的高分讨论。"
+  },
+  {
+    "scraper": "rss",
+    "label": "RSS Feed",
+    "group": "Website",
+    "default_source_type": "website",
+    "default_item_type": "article",
+    "input_schema_version": 1,
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "source",
+        "fetch",
+        "filters",
+        "enrich",
+        "runtime"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "url": {
+              "type": "string"
+            }
+          }
+        },
+        "fetch": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "max_items": {
+              "type": "integer"
+            },
+            "fetch_window_hours": {
+              "type": "integer"
+            }
+          }
+        },
+        "filters": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {}
+        },
+        "enrich": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "enum": []
+              },
+              "when": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "runtime": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "timeout": {
+              "type": "number",
+              "minimum": 1
+            },
+            "retries": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "concurrency": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "rate_limit": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "default_input": {
+      "source": {
+        "url": ""
+      },
+      "fetch": {
+        "max_items": 10,
+        "fetch_window_hours": 25
+      },
+      "filters": {},
+      "enrich": [],
+      "runtime": {}
+    },
+    "required_secrets": [],
+    "supported_enrichers": [],
+    "rate_limit": {},
+    "description": "抓取标准 RSS/Atom 订阅源。"
+  },
+  {
+    "scraper": "twitter_twscrape",
+    "label": "Twitter / X",
+    "group": "Social",
+    "default_source_type": "social",
+    "default_item_type": "post",
+    "input_schema_version": 1,
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "source",
+        "fetch",
+        "filters",
+        "enrich",
+        "runtime"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "watch_accounts": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "tracked_keywords": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "fetch": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "max_age_days": {
+              "type": "integer"
+            }
+          }
+        },
+        "filters": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "timeline_min_faves": {
+              "type": "integer"
+            },
+            "min_likes": {
+              "type": "integer"
+            }
+          }
+        },
+        "enrich": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "enum": []
+              },
+              "when": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "runtime": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "timeout": {
+              "type": "number",
+              "minimum": 1
+            },
+            "retries": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "concurrency": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "rate_limit": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "default_input": {
+      "source": {
+        "watch_accounts": [],
+        "tracked_keywords": []
+      },
+      "fetch": {
+        "max_age_days": 2
+      },
+      "filters": {
+        "timeline_min_faves": 50
+      },
+      "enrich": [],
+      "runtime": {}
+    },
+    "required_secrets": [
+      "TWITTERAPI_IO_KEY"
+    ],
+    "supported_enrichers": [],
+    "rate_limit": {},
+    "description": "抓取关注账号和关键词命中的推文。"
+  }
+]

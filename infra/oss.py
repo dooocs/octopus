@@ -10,6 +10,7 @@ from datetime import date
 from urllib.parse import urlparse
 
 import requests
+from infra.http import http_get
 
 OSS_ENDPOINT = "oss-cn-hangzhou.aliyuncs.com"
 OSS_BUCKET = "amazingindex"
@@ -95,7 +96,7 @@ def upload_image_to_oss(url: str, date_str: str | None = None) -> str | None:
     try:
         resp = None
         for attempt in range(3):
-            resp = requests.get(url, timeout=DOWNLOAD_TIMEOUT, stream=True, headers={
+            resp = http_get(url, timeout=DOWNLOAD_TIMEOUT, stream=True, headers={
                 "User-Agent": "Mozilla/5.0 (compatible; ImageFetcher/1.0)",
             })
             if resp.status_code == 200:

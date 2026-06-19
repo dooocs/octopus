@@ -11,6 +11,7 @@ dependencies = [
   "beautifulsoup4>=4.12.0",
   "feedparser>=6.0.0",
   "httpx>=0.27",
+  "jsonschema>=4.0",
   "lxml>=5.0.0",
   "oss2>=2.18.0",
   "PyMySQL>=1.1.0",
@@ -22,8 +23,10 @@ dependencies = [
 
 [project.scripts]
 octopus-aliyun-rds-test = "scripts.aliyun_rds_test_insert:main"
+octopus-export-scraper-specs = "scripts.export_scraper_specs:main"
 octopus-global-scrape = "scripts.global_scrape:main"
+octopus-migrate-scraper-configs-v1 = "scripts.migrate_scraper_configs_v1:main"
 octopus-sync-raw-items-snapshot = "scripts.sync_raw_items_snapshot:main"
 
 [tool.setuptools.packages.find]
-include = ["infra*", "scrapers*", "scripts*"]
+include = ["core*", "infra*", "pipeline*", "scrapers*", "scripts*", "sources*"]
