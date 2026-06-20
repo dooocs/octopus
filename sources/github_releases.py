@@ -4,11 +4,11 @@ import os
 from datetime import datetime, timezone, timedelta
 from typing import Any
 
-from core.contracts import ChannelSpec, RawItem, RunContext, ScraperConfig, SourceRecord
+from core.contracts import ChannelSpec, RawItem, RunContext, ScraperConfig, SourceAdapterBase, SourceRecord
 from core.registry import register_adapter
 from infra.http import http_get
 
-from .legacy import BOOLEAN, INTEGER, STRING_ARRAY, default_input, input_schema
+from .spec_helpers import BOOLEAN, INTEGER, STRING_ARRAY, default_input, input_schema
 
 GITHUB_API_URL = "https://api.github.com"
 
@@ -42,7 +42,7 @@ def _asset_downloads(release: dict[str, Any]) -> int:
 
 
 @register_adapter
-class GitHubReleasesAdapter:
+class GitHubReleasesAdapter(SourceAdapterBase):
     spec = ChannelSpec(
         scraper="github_releases",
         label="GitHub Releases",

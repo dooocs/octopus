@@ -3,11 +3,11 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from core.contracts import ChannelSpec, RawItem, RunContext, ScraperConfig, SourceRecord
+from core.contracts import ChannelSpec, RawItem, RunContext, ScraperConfig, SourceAdapterBase, SourceRecord
 from core.registry import register_adapter
 from infra.http import http_get
 
-from .legacy import INTEGER, STRING_ARRAY, default_input, input_schema
+from .spec_helpers import INTEGER, STRING_ARRAY, default_input, input_schema
 
 OPENREVIEW_API_URL = "https://api2.openreview.net/notes"
 
@@ -37,7 +37,7 @@ def _as_list(value: Any) -> list[Any]:
 
 
 @register_adapter
-class OpenReviewAdapter:
+class OpenReviewAdapter(SourceAdapterBase):
     spec = ChannelSpec(
         scraper="openreview",
         label="OpenReview",

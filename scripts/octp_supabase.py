@@ -52,7 +52,7 @@ def runtime_config_from_row(row: dict[str, Any]) -> dict[str, Any]:
 
     return {
         "id": row.get("id"),
-        "type": str(scraper),
+        "scraper": str(scraper),
         "name": str(name),
         "enabled": bool(row.get("enabled", True)),
         "priority": int(row.get("priority") or 100),
@@ -60,7 +60,7 @@ def runtime_config_from_row(row: dict[str, Any]) -> dict[str, Any]:
         "sub_source_type": str(sub_source_type),
         "item_type": str(item_type),
         "input_schema_version": int(row.get("input_schema_version") or 1),
-        "config": _json_object(row.get("input"), field_name="input"),
+        "input": _json_object(row.get("input"), field_name="input"),
     }
 
 
@@ -73,7 +73,7 @@ def split_supported_configs(
     skipped: list[dict[str, Any]] = []
 
     for config in configs:
-        if config["type"] in supported:
+        if config["scraper"] in supported:
             runnable.append(config)
         else:
             skipped.append(config)

@@ -12,12 +12,14 @@ The crawler foundation refactor plan lives in:
 
 - [docs/octopus-crawler-foundation.md](docs/octopus-crawler-foundation.md)
 
-## Migrated Scrapers
+## Source Adapters
 
-The initial crawler engines were migrated from `ahaIndexSync` without moving the
-Supabase pipeline, LLM processing, ranking, enrichment, or public-site stages.
+The initial crawler sources were migrated from `ahaIndexSync` without moving the
+Supabase pipeline, LLM processing, ranking, or public-site stages. Source logic
+now lives in native `sources/*` adapters that implement `discover`, `enrich`,
+`select`, and `normalize`.
 
-Current engines:
+Current adapters:
 
 - `github_trending`
 - `github_search`
@@ -87,7 +89,7 @@ with OctopusDao.from_env() as dao:
     dao.upsert_raw_item(row)
 ```
 
-Run scrapers and write final output rows to RDS:
+Run enabled adapters and write final output rows to RDS:
 
 ```bash
 python -m scripts.global_scrape --continue-on-error --write-rds
@@ -149,7 +151,7 @@ does not depend on ad hoc `PYTHONPATH` settings.
 
 The manual GitHub Action `Global Scrape` reads enabled rows from Supabase
 `octp_scraper_configs`, writes one row per scraper execution into
-`octp_scraper_logs`, runs the supported Octopus scraper engines, and can upsert
+`octp_scraper_logs`, runs the supported Octopus source adapters, and can upsert
 the resulting rows into the Aliyun RDS `raw_items` table.
 
 When `write_rds` is enabled, the Action then refreshes one Supabase frontend

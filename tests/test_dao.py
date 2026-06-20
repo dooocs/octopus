@@ -30,7 +30,7 @@ class RawItemsDaoTest(unittest.TestCase):
             original_url="https://example.com/demo",
             source_name="Example",
             source_type="website",
-            content_type="article",
+            item_type="article",
             body_text="Main body",
             raw_metrics={"views": 10},
             extra={"context_content": {"summary": "Short"}, "source_tag": "example"},

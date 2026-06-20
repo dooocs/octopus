@@ -97,8 +97,8 @@ class ScraperConfig:
 
     @classmethod
     def from_mapping(cls, row: Mapping[str, Any]) -> "ScraperConfig":
-        scraper = row.get("scraper") or row.get("type")
-        raw_input = row.get("input", row.get("config"))
+        scraper = row.get("scraper")
+        raw_input = row.get("input")
         required = {
             "scraper": scraper,
             "name": row.get("name"),
@@ -128,7 +128,7 @@ class ScraperConfig:
     def to_runtime_dict(self) -> dict[str, Any]:
         return {
             "id": self.id,
-            "type": self.scraper,
+            "scraper": self.scraper,
             "name": self.name,
             "enabled": self.enabled,
             "priority": self.priority,
@@ -136,7 +136,7 @@ class ScraperConfig:
             "sub_source_type": self.sub_source_type,
             "item_type": self.item_type,
             "input_schema_version": self.input_schema_version,
-            "config": self.input.to_dict(),
+            "input": self.input.to_dict(),
         }
 
 
@@ -190,7 +190,6 @@ class RawItem:
         source_name: str = "",
         source_type: str,
         item_type: str | None = None,
-        content_type: str | None = None,
         identity: str | None = None,
         author: str = "",
         author_url: str = "",
@@ -203,14 +202,13 @@ class RawItem:
         scraper_config_snapshot: dict[str, Any] | None = None,
         context_content: dict[str, Any] | None = None,
     ) -> None:
-        resolved_item_type = item_type or content_type
-        if not resolved_item_type:
+        if not item_type:
             raise ValueError("item_type is required")
         self.title = title
         self.original_url = original_url
         self.source_name = source_name
         self.source_type = source_type
-        self.item_type_value = resolved_item_type
+        self.item_type_value = item_type
         self.identity = identity or original_url
         self.author = author
         self.author_url = author_url
@@ -231,12 +229,8 @@ class RawItem:
     def item_type(self) -> str:
         return self.item_type_value
 
-    @property
-    def content_type(self) -> str:
-        return self.item_type_value
-
-    @content_type.setter
-    def content_type(self, value: str) -> None:
+    @item_type.setter
+    def item_type(self, value: str) -> None:
         self.item_type_value = value
 
     @property
@@ -286,16 +280,6 @@ class RawItem:
         return self.to_output_dict()
 
 
-@dataclass
-class BaseScraper:
-    name: str
-    config: dict[str, Any]
-    snapshot_date: str | None = None
-
-    def fetch(self) -> list[RawItem]:
-        raise NotImplementedError
-
-
 @dataclass(frozen=True)
 class ChannelSpec:
     scraper: str
@@ -338,6 +322,26 @@ class ScrapeTaskResult:
     state: dict[str, Any] = field(default_factory=dict)
 
 
+class SourceAdapterBase:
+    spec: ChannelSpec
+
+    def enrich(
+        self,
+        ctx: RunContext,
+        records: list[SourceRecord],
+        config: ScraperConfig,
+    ) -> list[SourceRecord]:
+        return records
+
+    def select(
+        self,
+        ctx: RunContext,
+        records: list[SourceRecord],
+        config: ScraperConfig,
+    ) -> list[SourceRecord]:
+        return records
+
+
 @runtime_checkable
 class SourceAdapter(Protocol):
     spec: ChannelSpec
@@ -353,5 +357,17 @@ class SourceAdapter(Protocol):
     ) -> list[SourceRecord]:
         ...
 
+    def select(
+        self,
+        ctx: RunContext,
+        records: list[SourceRecord],
+        config: ScraperConfig,
+    ) -> list[SourceRecord]:
+        ...
+
     def normalize(self, ctx: RunContext, record: SourceRecord, config: ScraperConfig) -> RawItem:
         ...
+
+
+def enrich_enabled(config: ScraperConfig, name: str) -> bool:
+    return any(item.get("name") == name for item in config.input.enrich if isinstance(item, dict))

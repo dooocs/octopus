@@ -1,7 +1,7 @@
 [
   {
     "scraper": "ai_blog",
-    "label": "AI Blog",
+    "label": "AI Blog / News",
     "group": "Website",
     "default_source_type": "website",
     "default_item_type": "article",
@@ -113,7 +113,8 @@
       "source": {
         "base_url": "",
         "news_url": "",
-        "link_selector": "a[href*='/news/']"
+        "link_selector": "a[href*='/news/']",
+        "source_tag": "official_ai"
       },
       "fetch": {
         "fetch_window_hours": 0,
@@ -135,7 +136,7 @@
       "full_text"
     ],
     "rate_limit": {},
-    "description": "抓取 AI 公司新闻页或博客页面。"
+    "description": "抓取官网/博客新闻列表，并可二阶段补全文。"
   },
   {
     "scraper": "arxiv",
@@ -1121,7 +1122,7 @@
   {
     "scraper": "hf_model",
     "label": "Hugging Face Models",
-    "group": "AI",
+    "group": "Model",
     "default_source_type": "model_hub",
     "default_item_type": "model",
     "input_schema_version": 1,
@@ -1235,13 +1236,13 @@
     "required_secrets": [],
     "supported_enrichers": [],
     "rate_limit": {},
-    "description": "抓取 Hugging Face 模型趋势。"
+    "description": "抓取 Hugging Face trending models。"
   },
   {
     "scraper": "hf_papers",
     "label": "Hugging Face Papers",
-    "group": "AI",
-    "default_source_type": "model_hub",
+    "group": "Research",
+    "default_source_type": "research",
     "default_item_type": "paper",
     "input_schema_version": 1,
     "input_schema": {

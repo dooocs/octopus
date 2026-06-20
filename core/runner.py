@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Callable
 
 from .contracts import RunContext, ScrapeTaskResult, ScraperConfig
 from .registry import get_adapter, list_types
@@ -14,6 +14,7 @@ def run_config(
     run_id: str | None = None,
     task_id: str | None = None,
     state: dict[str, Any] | None = None,
+    on_stage: Callable[[str], None] | None = None,
 ) -> ScrapeTaskResult:
     config = ScraperConfig.from_mapping(config_row)
     adapter_cls = get_adapter(config.scraper)
@@ -23,17 +24,25 @@ def run_config(
 
     adapter = adapter_cls()
     ctx = RunContext(snapshot_date=snapshot_date, run_id=run_id, task_id=task_id, state=state or {})
+    if on_stage:
+        on_stage("discover")
     records = adapter.discover(ctx, config)
-    filtered = records
-    enriched = adapter.enrich(ctx, filtered, config)
+    if on_stage:
+        on_stage("enrich")
+    enriched = adapter.enrich(ctx, records, config)
+    if on_stage:
+        on_stage("select")
+    selected = adapter.select(ctx, enriched, config)
 
-    rows: list[dict[str, Any]] = []
-    for record in enriched:
+    if on_stage:
+        on_stage("normalize")
+    items = []
+    for record in selected:
         item = adapter.normalize(ctx, record, config)
         item.snapshot_date = snapshot_date
         item.scraper_slug = config.sub_source_type
         item.source_type = config.source_type
-        item.content_type = config.item_type
+        item.item_type = config.item_type
         item.scraper_config_snapshot = {
             "id": config.id,
             "name": config.name,
@@ -44,13 +53,19 @@ def run_config(
             "input_schema_version": config.input_schema_version,
             "input": config.input.to_dict(),
         }
+        items.append(item)
+
+    if on_stage:
+        on_stage("validate_output")
+    rows: list[dict[str, Any]] = []
+    for item in items:
         validate_raw_item(item)
         rows.append(item.to_output_dict())
 
     return ScrapeTaskResult(
         rows=rows,
         items_discovered=len(records),
-        items_filtered=len(filtered),
+        items_filtered=len(selected),
         items_enriched=len(enriched),
         state=ctx.state,
     )

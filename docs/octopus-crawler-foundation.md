@@ -9,12 +9,12 @@ Octopus 的边界分三层：
 | 层级 | 是否配置化 | 说明 |
 | --- | --- | --- |
 | 抓什么 | 是 | 来源、关键词、账号、榜单、时间窗口、分页、数量限制由配置控制。 |
-| 筛什么 | 是 | GitHub stars、HN score、Product Hunt votes、Reddit NSFW 等由渠道配置控制。 |
+| 选什么 | 是 | GitHub stars、HN score、Product Hunt votes、Reddit NSFW 等由渠道配置控制。 |
 | 最终保存什么字段 | 否 | `raw_items` 是代码级稳定契约，不允许由配置决定字段名、字段集合或表结构。 |
 
 一句话原则：
 
-> 配置决定候选集和补充动作，代码决定最终输出契约。
+> 配置决定候选集、补充动作和最终选择条件，代码决定最终输出契约。
 
 因此不要设计 `output_fields`、`save_content`、`save_metrics` 这类配置。否则下游会面对不确定的数据结构，后续消费链路会被配置污染。
 
@@ -26,8 +26,8 @@ Octopus 的边界分三层：
 load configs
   -> validate config
   -> discover
-  -> filter
   -> enrich
+  -> select
   -> normalize
   -> validate output
   -> sink
@@ -50,9 +50,9 @@ load configs
 
 | 执行阶段 | 读取配置 | 职责 |
 | --- | --- | --- |
-| `discover` | `source` + `fetch` + `runtime` | 访问来源，拿到候选记录。 |
-| `filter` | `filters` | 按渠道原生语义过滤候选记录。 |
+| `discover` | `source` + `fetch` + 必要的 `filters` + `runtime` | 访问来源，拿到候选记录；允许用来源侧 query/阈值先控制召回规模。 |
 | `enrich` | `enrich` + `runtime` | 二阶段补充正文、README、评论、图片等。 |
+| `select` | `filters` + 已 enrich 的记录 | 基于完整质量信号做最终保留、排序、截断。 |
 | `normalize` | 顶层配置 + adapter 代码 | 转换成统一 `RawItem`。 |
 | `validate output` | `RawItem` contract | 校验最终输出是否满足 `raw_items` 契约。 |
 | `sink` | runner/env/CLI | 写 JSONL、RDS、日志、状态；不属于单个 scraper 的 `input`。 |
@@ -99,7 +99,7 @@ Supabase `octp_scraper_configs` 顶层字段保持稳定：
 | --- | --- |
 | `source` | 源头定义，例如 RSS URL、GitHub queries、Reddit subreddit、X accounts。 |
 | `fetch` | 抓取范围，例如 `limit`、`per_page`、`window_days`、`cutoff_hours`、`top_n`。 |
-| `filters` | 过滤条件，保留渠道原生语义，例如 `min_stars`、`min_score`、`min_votes`。 |
+| `filters` | 选择条件，保留渠道原生语义，例如 `min_stars`、`min_score`、`min_votes`；可用于 discover 召回剪枝，也可用于 enrich 后 select。 |
 | `enrich` | 二阶段补充动作列表，例如 `github_readme`、`article_body`、`top_comments`。 |
 | `runtime` | 执行控制，例如 `timeout`、`retries`、`concurrency`、`rate_limit`。 |
 
@@ -239,7 +239,6 @@ octopus/
     registry.py
     runner.py
     validation.py
-    filters.py
   infra/
     http.py
     dao/
@@ -282,14 +281,22 @@ octopus/
 class SourceAdapter:
     spec: ChannelSpec
 
-    def discover(self, ctx: RunContext, config: RuntimeConfig) -> list[SourceRecord]:
+    def discover(self, ctx: RunContext, config: ScraperConfig) -> list[SourceRecord]:
         ...
 
     def enrich(
         self,
         ctx: RunContext,
         records: list[SourceRecord],
-        config: RuntimeConfig,
+        config: ScraperConfig,
+    ) -> list[SourceRecord]:
+        return records
+
+    def select(
+        self,
+        ctx: RunContext,
+        records: list[SourceRecord],
+        config: ScraperConfig,
     ) -> list[SourceRecord]:
         return records
 
@@ -297,7 +304,7 @@ class SourceAdapter:
         self,
         ctx: RunContext,
         record: SourceRecord,
-        config: RuntimeConfig,
+        config: ScraperConfig,
     ) -> RawItem:
         ...
 ```
@@ -390,8 +397,8 @@ updated_date
 ```text
 validate_config
 discover
-filter
 enrich
+select
 normalize
 validate_output
 sink
@@ -469,14 +476,14 @@ unsupported scraper configs
 | spec 校验 | registry 中每个 adapter 都有合法 `ChannelSpec`。 |
 | 输出校验 | `RawItem` 必填字段、JSON 字段、ID、时间字段满足 `raw_items` 契约。 |
 | runner | 单 task 失败隔离、run summary 正确、state 更新正确。 |
-| adapter fixture | 每个 adapter 用固定 fixture 验证 discover/enrich/normalize。 |
+| adapter fixture | 每个 adapter 用固定 fixture 验证 discover/enrich/select/normalize。 |
 | 迁移脚本 | flat input 到五段式 input 的转换结果可重复、可校验。 |
 | 前端 | generated specs 能加载，无法创建未知 scraper。 |
 
 建议验证命令：
 
 ```bash
-python -m compileall infra scrapers scripts tests
+python -m compileall core infra pipeline sources scripts tests
 python -m unittest discover tests
 cd web && npm run build
 ```
@@ -494,4 +501,3 @@ cd web && npm run build
 - 每个渠道输出仍满足现有 `raw_items` contract。
 - 单个渠道失败不会污染其他渠道结果。
 - 下游可以只依赖 `raw_items` 继续消费数据。
-

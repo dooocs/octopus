@@ -5,11 +5,11 @@ from datetime import datetime, timezone, timedelta
 from typing import Any
 from urllib.parse import quote
 
-from core.contracts import ChannelSpec, RawItem, RunContext, ScraperConfig, SourceRecord
+from core.contracts import ChannelSpec, RawItem, RunContext, ScraperConfig, SourceAdapterBase, SourceRecord
 from core.registry import register_adapter
 from infra.http import http_get
 
-from .legacy import BOOLEAN, INTEGER, STRING, STRING_ARRAY, default_input, input_schema
+from .spec_helpers import BOOLEAN, INTEGER, STRING, STRING_ARRAY, default_input, input_schema
 
 NPM_SEARCH_URL = "https://registry.npmjs.org/-/v1/search"
 NPM_PACKAGE_URL = "https://registry.npmjs.org"
@@ -72,7 +72,7 @@ def _author_name(value: Any) -> str:
 
 
 @register_adapter
-class NpmPackageReleasesAdapter:
+class NpmPackageReleasesAdapter(SourceAdapterBase):
     spec = ChannelSpec(
         scraper="npm_package_releases",
         label="npm Package Releases",
@@ -319,7 +319,7 @@ class NpmPackageReleasesAdapter:
 
 
 @register_adapter
-class PyPIPackageReleasesAdapter:
+class PyPIPackageReleasesAdapter(SourceAdapterBase):
     spec = ChannelSpec(
         scraper="pypi_package_releases",
         label="PyPI Package Releases",

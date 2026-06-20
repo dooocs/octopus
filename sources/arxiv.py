@@ -6,11 +6,11 @@ from typing import Any
 
 import feedparser
 
-from core.contracts import ChannelSpec, RawItem, RunContext, ScraperConfig, SourceRecord
+from core.contracts import ChannelSpec, RawItem, RunContext, ScraperConfig, SourceAdapterBase, SourceRecord
 from core.registry import register_adapter
 from infra.http import http_get
 
-from .legacy import INTEGER, STRING, STRING_ARRAY, default_input, input_schema
+from .spec_helpers import INTEGER, STRING, STRING_ARRAY, default_input, input_schema
 
 ARXIV_API_URL = "https://export.arxiv.org/api/query"
 
@@ -87,7 +87,7 @@ def _matches_terms(title: str, summary: str, include_terms: list[str], exclude_t
 
 
 @register_adapter
-class ArxivAdapter:
+class ArxivAdapter(SourceAdapterBase):
     spec = ChannelSpec(
         scraper="arxiv",
         label="arXiv",
