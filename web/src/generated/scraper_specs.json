@@ -113,6 +113,167 @@
     "description": "抓取 AI 公司新闻页或博客页面。"
   },
   {
+    "scraper": "arxiv",
+    "label": "arXiv",
+    "group": "Research",
+    "default_source_type": "research",
+    "default_item_type": "paper",
+    "input_schema_version": 1,
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "source",
+        "fetch",
+        "filters",
+        "enrich",
+        "runtime"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "queries": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "q",
+                  "label"
+                ],
+                "properties": {
+                  "q": {
+                    "type": "string"
+                  },
+                  "label": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "fetch": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "max_results": {
+              "type": "integer"
+            },
+            "limit": {
+              "type": "integer"
+            },
+            "window_days": {
+              "type": "integer"
+            },
+            "sort_by": {
+              "type": "string",
+              "enum": [
+                "relevance",
+                "lastUpdatedDate",
+                "submittedDate"
+              ]
+            },
+            "sort_order": {
+              "type": "string",
+              "enum": [
+                "ascending",
+                "descending"
+              ]
+            }
+          }
+        },
+        "filters": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "include_terms": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "exclude_terms": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "enrich": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "enum": []
+              },
+              "when": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "runtime": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "timeout": {
+              "type": "number",
+              "minimum": 1
+            },
+            "retries": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "concurrency": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "rate_limit": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "default_input": {
+      "source": {
+        "queries": [
+          {
+            "q": "cat:cs.AI OR cat:cs.LG OR cat:cs.CL",
+            "label": "ai_ml_cl"
+          }
+        ]
+      },
+      "fetch": {
+        "max_results": 25,
+        "limit": 3,
+        "window_days": 3,
+        "sort_by": "submittedDate",
+        "sort_order": "descending"
+      },
+      "filters": {
+        "include_terms": [],
+        "exclude_terms": []
+      },
+      "enrich": [],
+      "runtime": {}
+    },
+    "required_secrets": [],
+    "supported_enrichers": [],
+    "rate_limit": {},
+    "description": "按 arXiv 查询抓取近期论文，默认每天取最近 top3。"
+  },
+  {
     "scraper": "community_linuxdo",
     "label": "LinuxDo",
     "group": "Community",
@@ -335,6 +496,143 @@
     ],
     "rate_limit": {},
     "description": "抓取 V2EX 热门技术讨论。"
+  },
+  {
+    "scraper": "github_releases",
+    "label": "GitHub Releases",
+    "group": "Code",
+    "default_source_type": "code_host",
+    "default_item_type": "release",
+    "input_schema_version": 1,
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "source",
+        "fetch",
+        "filters",
+        "enrich",
+        "runtime"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "repositories": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "fetch": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "releases_per_repo": {
+              "type": "integer"
+            },
+            "window_days": {
+              "type": "integer"
+            },
+            "limit": {
+              "type": "integer"
+            },
+            "sort_by": {
+              "type": "string",
+              "enum": [
+                "asset_downloads",
+                "published_at"
+              ]
+            }
+          }
+        },
+        "filters": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "skip_prerelease": {
+              "type": "boolean"
+            },
+            "min_asset_downloads": {
+              "type": "integer"
+            }
+          }
+        },
+        "enrich": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "enum": []
+              },
+              "when": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "runtime": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "timeout": {
+              "type": "number",
+              "minimum": 1
+            },
+            "retries": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "concurrency": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "rate_limit": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "default_input": {
+      "source": {
+        "repositories": [
+          "openai/openai-python",
+          "anthropics/anthropic-sdk-python",
+          "langchain-ai/langchain",
+          "langchain-ai/langgraph",
+          "huggingface/transformers",
+          "vllm-project/vllm",
+          "ollama/ollama",
+          "modelcontextprotocol/python-sdk"
+        ]
+      },
+      "fetch": {
+        "releases_per_repo": 5,
+        "window_days": 14,
+        "limit": 3,
+        "sort_by": "asset_downloads"
+      },
+      "filters": {
+        "skip_prerelease": true,
+        "min_asset_downloads": 0
+      },
+      "enrich": [],
+      "runtime": {}
+    },
+    "required_secrets": [],
+    "supported_enrichers": [],
+    "rate_limit": {},
+    "description": "抓取 watched GitHub repositories 的近期 release，默认每天取 top3。"
   },
   {
     "scraper": "github_search",
@@ -977,6 +1275,420 @@
     "description": "抓取 Hugging Face Daily Papers。"
   },
   {
+    "scraper": "lobsters",
+    "label": "Lobsters",
+    "group": "Community",
+    "default_source_type": "community",
+    "default_item_type": "article",
+    "input_schema_version": 1,
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "source",
+        "fetch",
+        "filters",
+        "enrich",
+        "runtime"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "feed": {
+              "type": "string"
+            },
+            "tags": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "fetch": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "window_days": {
+              "type": "integer"
+            },
+            "limit": {
+              "type": "integer"
+            }
+          }
+        },
+        "filters": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "min_score": {
+              "type": "integer"
+            },
+            "min_comments": {
+              "type": "integer"
+            },
+            "tag_whitelist": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "tag_blacklist": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "enrich": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "enum": []
+              },
+              "when": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "runtime": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "timeout": {
+              "type": "number",
+              "minimum": 1
+            },
+            "retries": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "concurrency": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "rate_limit": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "default_input": {
+      "source": {
+        "feed": "hottest",
+        "tags": []
+      },
+      "fetch": {
+        "window_days": 2,
+        "limit": 3
+      },
+      "filters": {
+        "min_score": 0,
+        "min_comments": 0,
+        "tag_whitelist": [],
+        "tag_blacklist": []
+      },
+      "enrich": [],
+      "runtime": {}
+    },
+    "required_secrets": [],
+    "supported_enrichers": [],
+    "rate_limit": {},
+    "description": "抓取 Lobsters 热榜或指定 tag JSON，默认按 score/comment_count 取 top3。"
+  },
+  {
+    "scraper": "npm_package_releases",
+    "label": "npm Package Releases",
+    "group": "Package",
+    "default_source_type": "package_registry",
+    "default_item_type": "package_release",
+    "input_schema_version": 1,
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "source",
+        "fetch",
+        "filters",
+        "enrich",
+        "runtime"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "search_queries": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "q",
+                  "label"
+                ],
+                "properties": {
+                  "q": {
+                    "type": "string"
+                  },
+                  "label": {
+                    "type": "string"
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "packages": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "fetch": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "search_size": {
+              "type": "integer"
+            },
+            "window_days": {
+              "type": "integer"
+            },
+            "limit": {
+              "type": "integer"
+            }
+          }
+        },
+        "filters": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "min_weekly_downloads": {
+              "type": "integer"
+            },
+            "skip_prerelease": {
+              "type": "boolean"
+            }
+          }
+        },
+        "enrich": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "enum": []
+              },
+              "when": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "runtime": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "timeout": {
+              "type": "number",
+              "minimum": 1
+            },
+            "retries": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "concurrency": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "rate_limit": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "default_input": {
+      "source": {
+        "search_queries": [
+          {
+            "q": "keywords:ai",
+            "label": "ai"
+          }
+        ],
+        "packages": [
+          "openai",
+          "@anthropic-ai/sdk",
+          "ai",
+          "langchain",
+          "@modelcontextprotocol/sdk"
+        ]
+      },
+      "fetch": {
+        "search_size": 25,
+        "window_days": 7,
+        "limit": 3
+      },
+      "filters": {
+        "min_weekly_downloads": 1000,
+        "skip_prerelease": true
+      },
+      "enrich": [],
+      "runtime": {}
+    },
+    "required_secrets": [],
+    "supported_enrichers": [],
+    "rate_limit": {},
+    "description": "抓取 npm 近期更新包，保留 weekly/monthly downloads 等原生指标。"
+  },
+  {
+    "scraper": "openreview",
+    "label": "OpenReview",
+    "group": "Research",
+    "default_source_type": "research",
+    "default_item_type": "paper",
+    "input_schema_version": 1,
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "source",
+        "fetch",
+        "filters",
+        "enrich",
+        "runtime"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "venue_ids": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "invitations": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "fetch": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "per_source": {
+              "type": "integer"
+            },
+            "limit": {
+              "type": "integer"
+            },
+            "sort_by": {
+              "type": "string",
+              "enum": [
+                "reply_count",
+                "published_at"
+              ]
+            }
+          }
+        },
+        "filters": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "min_reply_count": {
+              "type": "integer"
+            }
+          }
+        },
+        "enrich": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "enum": []
+              },
+              "when": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "runtime": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "timeout": {
+              "type": "number",
+              "minimum": 1
+            },
+            "retries": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "concurrency": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "rate_limit": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "default_input": {
+      "source": {
+        "venue_ids": [
+          "ICLR.cc/2026/Conference"
+        ],
+        "invitations": []
+      },
+      "fetch": {
+        "per_source": 50,
+        "limit": 3,
+        "sort_by": "reply_count"
+      },
+      "filters": {
+        "min_reply_count": 0
+      },
+      "enrich": [],
+      "runtime": {}
+    },
+    "required_secrets": [],
+    "supported_enrichers": [],
+    "rate_limit": {},
+    "description": "抓取 OpenReview 公开 venue/submission notes，默认按 replyCount 取 top3。"
+  },
+  {
     "scraper": "product_hunt",
     "label": "Product Hunt",
     "group": "Product",
@@ -1094,6 +1806,130 @@
     "supported_enrichers": [],
     "rate_limit": {},
     "description": "抓取 Product Hunt 高票新产品。"
+  },
+  {
+    "scraper": "pypi_package_releases",
+    "label": "PyPI Package Releases",
+    "group": "Package",
+    "default_source_type": "package_registry",
+    "default_item_type": "package_release",
+    "input_schema_version": 1,
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "source",
+        "fetch",
+        "filters",
+        "enrich",
+        "runtime"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "packages": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "fetch": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "window_days": {
+              "type": "integer"
+            },
+            "limit": {
+              "type": "integer"
+            }
+          }
+        },
+        "filters": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "skip_prerelease": {
+              "type": "boolean"
+            },
+            "skip_yanked": {
+              "type": "boolean"
+            }
+          }
+        },
+        "enrich": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "enum": []
+              },
+              "when": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "runtime": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "timeout": {
+              "type": "number",
+              "minimum": 1
+            },
+            "retries": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "concurrency": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "rate_limit": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "default_input": {
+      "source": {
+        "packages": [
+          "openai",
+          "anthropic",
+          "langchain",
+          "langgraph",
+          "llama-index",
+          "transformers",
+          "vllm"
+        ]
+      },
+      "fetch": {
+        "window_days": 14,
+        "limit": 3
+      },
+      "filters": {
+        "skip_prerelease": true,
+        "skip_yanked": true
+      },
+      "enrich": [],
+      "runtime": {}
+    },
+    "required_secrets": [],
+    "supported_enrichers": [],
+    "rate_limit": {},
+    "description": "抓取 PyPI watched packages 的近期 release；PyPI 官方 JSON 不提供可靠下载量。"
   },
   {
     "scraper": "reddit",
