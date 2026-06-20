@@ -77,7 +77,6 @@ class LobstersAdapterTest(unittest.TestCase):
                 "fetch": {"window_days": 7, "limit": 1},
                 "filters": {"min_score": 0, "min_comments": 0, "tag_whitelist": [], "tag_blacklist": []},
                 "enrich": [],
-                "runtime": {},
             },
         }
 
@@ -126,7 +125,6 @@ class NpmPackageReleasesAdapterTest(unittest.TestCase):
                 "fetch": {"search_size": 1, "window_days": 7, "limit": 1},
                 "filters": {"min_weekly_downloads": 1000, "skip_prerelease": True},
                 "enrich": [],
-                "runtime": {},
             },
         }
 
@@ -169,9 +167,8 @@ class NpmPackageReleasesAdapterTest(unittest.TestCase):
             "input": {
                 "source": {"search_queries": [], "packages": ["demo-ai"]},
                 "fetch": {"search_size": 1, "window_days": 7, "limit": 1},
-                "filters": {"min_weekly_downloads": 1, "skip_prerelease": True},
+                "filters": {"min_weekly_downloads": 100000, "skip_prerelease": True},
                 "enrich": [],
-                "runtime": {},
             },
         }
 
@@ -183,6 +180,75 @@ class NpmPackageReleasesAdapterTest(unittest.TestCase):
         self.assertEqual(row["metrics"]["downloads_monthly"], 4000)
         self.assertIn("Detailed release notes", row["context_content"]["release_notes"])
         self.assertEqual(row["author_id"], "Alice")
+
+
+class PyPIPackageReleasesPruneTest(unittest.TestCase):
+    def test_pypi_prune_uses_discovered_release_date_before_download_enrichment(self) -> None:
+        payloads = {
+            "oldpopular": {
+                "info": {"summary": "Old popular", "description": "Old body", "author": "Bob"},
+                "vulnerabilities": [],
+                "releases": {
+                    "1.0.0": [
+                        {
+                            "upload_time_iso_8601": "2026-06-18T00:00:00.000Z",
+                            "filename": "oldpopular-1.0.0.tar.gz",
+                            "packagetype": "sdist",
+                            "size": 123,
+                            "yanked": False,
+                        }
+                    ]
+                },
+            },
+            "newquiet": {
+                "info": {"summary": "New quiet", "description": "New body", "author": "Alice"},
+                "vulnerabilities": [],
+                "releases": {
+                    "2.0.0": [
+                        {
+                            "upload_time_iso_8601": "2026-06-20T00:00:00.000Z",
+                            "filename": "newquiet-2.0.0.tar.gz",
+                            "packagetype": "sdist",
+                            "size": 456,
+                            "yanked": False,
+                        }
+                    ]
+                },
+            },
+        }
+        called_urls: list[str] = []
+
+        def fake_get(url: str, **kwargs: object) -> _FakeResponse:
+            called_urls.append(url)
+            if "pypistats.org" in url:
+                downloads = 999999 if "oldpopular" in url else 1
+                return _FakeResponse({"data": {"last_day": downloads, "last_week": downloads, "last_month": downloads}})
+            if "oldpopular" in url:
+                return _FakeResponse(payloads["oldpopular"])
+            return _FakeResponse(payloads["newquiet"])
+
+        config = {
+            "scraper": "pypi_package_releases",
+            "name": "PyPI",
+            "enabled": True,
+            "source_type": "package_registry",
+            "sub_source_type": "pypi_package_releases",
+            "item_type": "package_release",
+            "input": {
+                "source": {"packages": ["oldpopular", "newquiet"]},
+                "fetch": {"window_days": 7, "limit": 1, "fetch_downloads": True},
+                "filters": {"skip_prerelease": True, "skip_yanked": True},
+                "enrich": [],
+            },
+        }
+
+        with patch("sources.package_releases.http_get", side_effect=fake_get):
+            result = run_config(config, "2026-06-20")
+
+        self.assertEqual(len(result.rows), 1)
+        self.assertEqual(result.rows[0]["title"], "newquiet 2.0.0")
+        self.assertEqual(result.rows[0]["metrics"]["downloads_last_week"], 1)
+        self.assertFalse(any("oldpopular/recent" in url for url in called_urls))
 
 
 if __name__ == "__main__":

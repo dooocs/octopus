@@ -142,7 +142,6 @@ class HackerNewsAdapter(SourceAdapterBase):
     def discover(self, ctx: RunContext, config: ScraperConfig) -> list[SourceRecord]:
         new_n = int(config.input.fetch.get("new_n") or 500)
         cutoff_hours = int(config.input.fetch.get("cutoff_hours") or 36)
-        min_score = int(config.input.filters.get("min_score") or 50)
         cutoff = datetime.now(timezone.utc) - timedelta(hours=cutoff_hours)
 
         resp = http_get(f"{HN_API}/newstories.json", timeout=15)
@@ -151,12 +150,16 @@ class HackerNewsAdapter(SourceAdapterBase):
         seen: set[str] = set()
         records: list[SourceRecord] = []
         for story_id in story_ids:
-            record = self._story_record(int(story_id), seen, cutoff, min_score)
+            record = self._story_record(int(story_id), seen, cutoff)
             if record is False:
                 break
             if record:
                 records.append(record)
         return records
+
+    def prune(self, ctx: RunContext, records: list[SourceRecord], config: ScraperConfig) -> list[SourceRecord]:
+        min_score = int(config.input.filters.get("min_score") or 50)
+        return [record for record in records if int(record.metrics.get("score") or 0) >= min_score]
 
     def enrich(self, ctx: RunContext, records: list[SourceRecord], config: ScraperConfig) -> list[SourceRecord]:
         if not records:
@@ -196,7 +199,7 @@ class HackerNewsAdapter(SourceAdapterBase):
                     record.context_content["top_comments_basis"] = "hackernews_api_order"
         return records
 
-    def _story_record(self, story_id: int, seen: set[str], cutoff: datetime, min_score: int) -> SourceRecord | bool | None:
+    def _story_record(self, story_id: int, seen: set[str], cutoff: datetime) -> SourceRecord | bool | None:
         try:
             story = _fetch_hn_item(story_id)
         except Exception:
@@ -210,8 +213,6 @@ class HackerNewsAdapter(SourceAdapterBase):
         if published_at < cutoff:
             return False
         score = int(story.get("score") or 0)
-        if score < min_score:
-            return None
         title = str(story.get("title") or "").strip()
         if not title:
             return None

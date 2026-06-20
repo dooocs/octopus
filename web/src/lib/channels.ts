@@ -18,9 +18,9 @@ type GeneratedSpec = {
 function schemaHint(spec: GeneratedSpec) {
   const properties = spec.input_schema.properties
   if (!properties || typeof properties !== 'object' || Array.isArray(properties)) {
-    return '{ source, fetch, filters, enrich, runtime }'
+    return '{ source, fetch, filters, enrich }'
   }
-  return '{ source, fetch, filters, enrich, runtime }'
+  return '{ source, fetch, filters, enrich }'
 }
 
 export const scraperChannels: ScraperChannel[] = (specs as unknown as GeneratedSpec[]).map((spec) => ({

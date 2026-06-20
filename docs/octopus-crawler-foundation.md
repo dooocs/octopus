@@ -26,23 +26,22 @@ Octopus 的边界分三层：
 load configs
   -> validate config
   -> discover
+  -> prune
   -> enrich
-  -> select
   -> normalize
   -> validate output
   -> sink
   -> update run/task/state
 ```
 
-配置五段式：
+配置四段式：
 
 ```json
 {
   "source": {},
   "fetch": {},
   "filters": {},
-  "enrich": [],
-  "runtime": {}
+  "enrich": []
 }
 ```
 
@@ -50,14 +49,14 @@ load configs
 
 | 执行阶段 | 读取配置 | 职责 |
 | --- | --- | --- |
-| `discover` | `source` + `fetch` + 必要的 `filters` + `runtime` | 访问来源，拿到候选记录；允许用来源侧 query/阈值先控制召回规模。 |
-| `enrich` | `enrich` + `runtime` | 二阶段补充正文、README、评论、图片等。 |
-| `select` | `filters` + 已 enrich 的记录 | 基于完整质量信号做最终保留、排序、截断。 |
+| `discover` | `source` + `fetch` | 访问来源，拿到候选记录；请求参数、分页、时间窗、API 侧 limit/per_page/max_results 属于召回范围。 |
+| `prune` | `filters` + 已 discover 的记录 | 只基于 `SourceRecord` 已有字段做本地过滤、排序、截断；不发详情、评论、README、downloads、clicks 等额外请求。 |
+| `enrich` | `enrich` | 仅对 prune 后记录补充正文、README、评论、图片等上下文，不再影响保留集。 |
 | `normalize` | 顶层配置 + adapter 代码 | 转换成统一 `RawItem`。 |
 | `validate output` | `RawItem` contract | 校验最终输出是否满足 `raw_items` 契约。 |
 | `sink` | runner/env/CLI | 写 JSONL、RDS、日志、状态；不属于单个 scraper 的 `input`。 |
 
-`runtime` 是横切配置，不是独立业务阶段。`sink` 是运行器能力，不进入 scraper 配置。
+执行控制是横切能力，不属于业务 `input` 段。`sink` 是运行器能力，不进入 scraper 配置。
 
 ## 3. 配置契约
 
@@ -77,8 +76,7 @@ Supabase `octp_scraper_configs` 顶层字段保持稳定：
     "source": {},
     "fetch": {},
     "filters": {},
-    "enrich": [],
-    "runtime": {}
+    "enrich": []
   }
 }
 ```
@@ -91,17 +89,16 @@ Supabase `octp_scraper_configs` 顶层字段保持稳定：
 | `source_type` | 来源大类，如 `website`、`social`、`community`、`code_host`、`model_hub`、`product_platform`。 |
 | `sub_source_type` | 具体业务通道 ID，必须稳定且唯一，如 `github_ai_search`、`hackernews_new`。 |
 | `item_type` | 内容对象类型，如 `article`、`repo`、`post`、`discussion`、`paper`、`model`、`product`。 |
-| `input` | 五段式渠道参数。 |
+| `input` | 四段式渠道参数。 |
 
-五段式 `input` 的一级 key 必须一致，内部字段由每个 adapter 的 `ChannelSpec.input_schema` 决定：
+四段式 `input` 的一级 key 必须一致，内部字段由每个 adapter 的 `ChannelSpec.input_schema` 决定：
 
 | key | 说明 |
 | --- | --- |
 | `source` | 源头定义，例如 RSS URL、GitHub queries、Reddit subreddit、X accounts。 |
 | `fetch` | 抓取范围，例如 `limit`、`per_page`、`window_days`、`cutoff_hours`、`top_n`。 |
-| `filters` | 选择条件，保留渠道原生语义，例如 `min_stars`、`min_score`、`min_votes`；可用于 discover 召回剪枝，也可用于 enrich 后 select。 |
+| `filters` | prune 阶段选择条件，保留渠道原生语义，例如 `min_stars`、`min_score`、`min_votes`。 |
 | `enrich` | 二阶段补充动作列表，例如 `github_readme`、`article_body`、`top_comments`。 |
-| `runtime` | 执行控制，例如 `timeout`、`retries`、`concurrency`、`rate_limit`。 |
 
 错误示例：
 
@@ -132,12 +129,7 @@ Supabase `octp_scraper_configs` 顶层字段保持稳定：
     },
     "enrich": [
       { "name": "github_readme", "when": "always" }
-    ],
-    "runtime": {
-      "timeout": 15,
-      "retries": 3,
-      "concurrency": 4
-    }
+    ]
   }
 }
 ```
@@ -159,12 +151,7 @@ HackerNews 示例：
     },
     "enrich": [
       { "name": "article_body", "when": "has_external_url" }
-    ],
-    "runtime": {
-      "timeout": 10,
-      "retries": 2,
-      "concurrency": 5
-    }
+    ]
   }
 }
 ```
@@ -292,7 +279,7 @@ class SourceAdapter:
     ) -> list[SourceRecord]:
         return records
 
-    def select(
+    def prune(
         self,
         ctx: RunContext,
         records: list[SourceRecord],
@@ -397,8 +384,8 @@ updated_date
 ```text
 validate_config
 discover
+prune
 enrich
-select
 normalize
 validate_output
 sink
@@ -449,7 +436,7 @@ updated_date
 
 1. 新增 `input_schema_version`、run/task/state 表。
 2. 引入 `core` 契约、adapter registry、ChannelSpec。
-3. 写配置迁移脚本，把所有现有 flat input 一次性转换为五段式 input。
+3. 写配置迁移脚本，把所有现有 flat input 一次性转换为四段式 input。
 4. 迁移所有现有 scraper 到新 adapter 接口。
 5. runner 不保留旧 flat input 运行兼容。
 6. 前端改为读取 generated specs。
@@ -472,12 +459,12 @@ unsupported scraper configs
 
 | 类型 | 场景 |
 | --- | --- |
-| 配置校验 | 缺少五段 key、多余一级 key、字段类型错误、未知 enrich name。 |
+| 配置校验 | 缺少四段 key、多余一级 key、字段类型错误、未知 enrich name。 |
 | spec 校验 | registry 中每个 adapter 都有合法 `ChannelSpec`。 |
 | 输出校验 | `RawItem` 必填字段、JSON 字段、ID、时间字段满足 `raw_items` 契约。 |
 | runner | 单 task 失败隔离、run summary 正确、state 更新正确。 |
-| adapter fixture | 每个 adapter 用固定 fixture 验证 discover/enrich/select/normalize。 |
-| 迁移脚本 | flat input 到五段式 input 的转换结果可重复、可校验。 |
+| adapter fixture | 每个 adapter 用固定 fixture 验证 discover/prune/enrich/normalize。 |
+| 迁移脚本 | flat input 到四段式 input 的转换结果可重复、可校验。 |
 | 前端 | generated specs 能加载，无法创建未知 scraper。 |
 
 建议验证命令：
@@ -492,7 +479,7 @@ cd web && npm run build
 
 重构完成必须满足：
 
-- 所有 enabled config 的 `input` 都是五段式结构。
+- 所有 enabled config 的 `input` 都是四段式结构。
 - 所有 scraper 都通过 adapter 接口运行。
 - Python `ChannelSpec` 是唯一渠道 schema 来源。
 - 前端不再手写渠道默认配置。

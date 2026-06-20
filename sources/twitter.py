@@ -102,21 +102,16 @@ class TwitterAdapter(SourceAdapterBase):
                     query = f'"{keyword}" -is:retweet lang:en min_faves:{min_likes}'
                     tweets = await self._paginated_fetch("/twitter/tweet/advanced_search", {"query": query, "queryType": "Latest"}, cutoff)
                     for tweet in tweets:
-                        if tweet.likes < min_likes:
-                            continue
-                        record = self._to_record(tweet, cutoff, seen)
+                        record = self._to_record(tweet, cutoff, seen, discover_via="keyword")
                         if record:
                             async with lock:
                                 records.append(record)
 
             async def fetch_account(username: str) -> None:
                 async with _SEM:
-                    min_faves = int(config.input.filters.get("timeline_min_faves") or 50)
                     tweets = await self._paginated_fetch("/twitter/user/last_tweets", {"userName": username}, cutoff)
                     for tweet in tweets:
-                        if tweet.likes < min_faves:
-                            continue
-                        record = self._to_record(tweet, cutoff, seen)
+                        record = self._to_record(tweet, cutoff, seen, discover_via="account")
                         if record:
                             async with lock:
                                 records.append(record)
@@ -126,6 +121,17 @@ class TwitterAdapter(SourceAdapterBase):
             await asyncio.gather(*[search_keyword(keyword) for keyword in keywords])
             await asyncio.gather(*[fetch_account(account) for account in accounts])
         return records
+
+    def prune(self, ctx: RunContext, records: list[SourceRecord], config: ScraperConfig) -> list[SourceRecord]:
+        min_likes = int(config.input.filters.get("min_likes") or 100)
+        timeline_min_faves = int(config.input.filters.get("timeline_min_faves") or 50)
+        pruned: list[SourceRecord] = []
+        for record in records:
+            likes = int(record.metrics.get("likes") or 0)
+            threshold = min_likes if record.extra.get("discover_via") == "keyword" else timeline_min_faves
+            if likes >= threshold:
+                pruned.append(record)
+        return pruned
 
     async def _paginated_fetch(self, endpoint: str, params: dict, cutoff: datetime, max_pages: int = 5) -> list[_Tweet]:
         all_tweets: list[_Tweet] = []
@@ -188,7 +194,7 @@ class TwitterAdapter(SourceAdapterBase):
             created_at=_parse_twitter_date(raw["createdAt"]),
         )
 
-    def _to_record(self, tweet: _Tweet, cutoff: datetime, seen: set[str]) -> SourceRecord | None:
+    def _to_record(self, tweet: _Tweet, cutoff: datetime, seen: set[str], *, discover_via: str) -> SourceRecord | None:
         if tweet.url in seen or tweet.created_at < cutoff or tweet.is_reply:
             return None
         seen.add(tweet.url)
@@ -200,6 +206,7 @@ class TwitterAdapter(SourceAdapterBase):
             metrics={"likes": tweet.likes, "retweets": tweet.retweets, "replies": tweet.replies, "views": tweet.views},
             extra={
                 "tweet_id": tweet.id,
+                "discover_via": discover_via,
                 "display_name": tweet.author_name,
                 "verified": tweet.author_verified,
                 "followers": tweet.author_followers,

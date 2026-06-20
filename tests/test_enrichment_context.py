@@ -48,7 +48,6 @@ class EnrichPhaseBoundaryTest(unittest.TestCase):
                 "fetch": {"max_items": 1, "fetch_window_hours": 999999, "fetch_full_text": True},
                 "filters": {},
                 "enrich": [{"name": "full_text", "when": "always"}],
-                "runtime": {},
             },
         }
         adapter = get_adapter("rss")()
@@ -110,7 +109,6 @@ class EnrichPhaseBoundaryTest(unittest.TestCase):
                 "fetch": {"window_days": 7, "limit": 1, "comments_to_keep": 10},
                 "filters": {"min_score": 0, "min_comments": 0, "tag_whitelist": [], "tag_blacklist": []},
                 "enrich": [{"name": "top_comments", "when": "always"}],
-                "runtime": {},
             },
         }
         adapter = get_adapter("lobsters")()
@@ -178,7 +176,6 @@ class HackerNewsEnrichmentTest(unittest.TestCase):
                     {"name": "article_body", "when": "has_external_url"},
                     {"name": "top_comments", "when": "always"},
                 ],
-                "runtime": {},
             },
         }
 
@@ -227,7 +224,6 @@ class FeedFullTextEnrichmentTest(unittest.TestCase):
                 },
                 "filters": {},
                 "enrich": [{"name": "full_text", "when": "always"}],
-                "runtime": {},
             },
         }
 
@@ -261,7 +257,6 @@ class AIBlogFullTextEnrichmentTest(unittest.TestCase):
                 "fetch": {"fetch_window_hours": 999999, "fetch_full_text": True, "full_text_timeout": 5, "max_content_chars": 12000},
                 "filters": {},
                 "enrich": [{"name": "full_text", "when": "always"}],
-                "runtime": {},
             },
         }
 
@@ -278,12 +273,22 @@ class AIBlogFullTextEnrichmentTest(unittest.TestCase):
 
 class V2EXEnrichmentTest(unittest.TestCase):
     def test_v2ex_fetches_post_body_and_top_replies_by_thanked(self) -> None:
-        topic = {
+        low_reply_topic = {
             "id": 1,
             "url": "https://www.v2ex.com/t/1",
-            "title": "V2EX topic",
+            "title": "V2EX high clicks",
             "content_rendered": "<p>Post body</p>",
-            "replies": 2,
+            "replies": 1,
+            "created": int(time.time()),
+            "member": {"username": "alice"},
+            "node": {"title": "AI"},
+        }
+        high_reply_topic = {
+            "id": 2,
+            "url": "https://www.v2ex.com/t/2",
+            "title": "V2EX high replies",
+            "content_rendered": "<p>Post body</p>",
+            "replies": 9,
             "created": int(time.time()),
             "member": {"username": "alice"},
             "node": {"title": "AI"},
@@ -295,10 +300,12 @@ class V2EXEnrichmentTest(unittest.TestCase):
 
         def fake_get(url: str, **kwargs: object) -> _FakeResponse:
             if url.endswith("/api/topics/hot.json"):
-                return _FakeResponse([topic])
+                return _FakeResponse([low_reply_topic, high_reply_topic])
             if url.endswith("/api/replies/show.json"):
                 return _FakeResponse(replies)
-            return _FakeResponse(text="<html>999 次点击</html>")
+            if url.endswith("/t/1"):
+                return _FakeResponse(text="<html>999 次点击</html>")
+            return _FakeResponse(text="<html>1 次点击</html>")
 
         config = {
             "scraper": "community_v2ex",
@@ -309,10 +316,9 @@ class V2EXEnrichmentTest(unittest.TestCase):
             "item_type": "discussion",
             "input": {
                 "source": {},
-                "fetch": {"top_n": 1, "top_clicked_limit": 1, "max_replies_to_fetch": 10, "max_replies_to_keep": 10},
+                "fetch": {"top_n": 2, "top_clicked_limit": 1, "max_replies_to_fetch": 10, "max_replies_to_keep": 10},
                 "filters": {},
                 "enrich": [{"name": "top_replies", "when": "always"}],
-                "runtime": {},
             },
         }
 
@@ -320,7 +326,8 @@ class V2EXEnrichmentTest(unittest.TestCase):
             result = run_config(config, "2026-06-20")
 
         row = result.rows[0]
-        self.assertEqual(row["metrics"]["clicks"], 999)
+        self.assertEqual(row["title"], "V2EX high replies")
+        self.assertEqual(row["metrics"]["clicks"], 1)
         self.assertEqual(row["context_content"]["post_content"], "Post body")
         self.assertEqual([reply["author"] for reply in row["context_content"]["top_comments"]], ["high", "low"])
 
@@ -369,7 +376,6 @@ class LinuxDoEnrichmentTest(unittest.TestCase):
                 "fetch": {"top_n": 1, "limit": 1, "max_replies_to_fetch": 10, "max_replies_to_keep": 10},
                 "filters": {},
                 "enrich": [{"name": "top_replies", "when": "always"}],
-                "runtime": {},
             },
         }
 
@@ -430,7 +436,6 @@ class ProductHuntEnrichmentTest(unittest.TestCase):
                 "fetch": {"max_retries": 1},
                 "filters": {"min_votes": 1, "topic_whitelist": [], "topic_blacklist": []},
                 "enrich": [{"name": "product_comments", "when": "always"}],
-                "runtime": {},
             },
         }
 
@@ -493,7 +498,6 @@ class RedditEnrichmentTest(unittest.TestCase):
                 "fetch": {"max_retries": 1, "post_limit": 1, "max_comments_to_keep": 10},
                 "filters": {"min_score": 1, "skip_nsfw": True, "skip_stickied": True, "skip_discussion_below": 0, "skip_self_text_below": 0},
                 "enrich": [{"name": "top_comments", "when": "always"}],
-                "runtime": {},
             },
         }
 
@@ -554,7 +558,6 @@ class RedditEnrichmentTest(unittest.TestCase):
                 "fetch": {"max_retries": 1, "post_limit": 1, "max_comments_to_keep": 10},
                 "filters": {"min_score": 1, "skip_nsfw": True, "skip_stickied": True, "skip_discussion_below": 0, "skip_self_text_below": 0},
                 "enrich": [{"name": "top_comments", "when": "always"}],
-                "runtime": {},
             },
         }
 
@@ -619,7 +622,6 @@ class OpenReviewEnrichmentTest(unittest.TestCase):
                 "fetch": {"per_source": 1, "limit": 1, "reply_limit": 10, "sort_by": "reply_count"},
                 "filters": {"min_reply_count": 0},
                 "enrich": [{"name": "openreview_replies", "when": "always"}],
-                "runtime": {},
             },
         }
 
@@ -659,7 +661,6 @@ class GitHubReleasesEnrichmentTest(unittest.TestCase):
                 "fetch": {"releases_per_repo": 1, "window_days": 7, "limit": 1, "sort_by": "asset_downloads"},
                 "filters": {"skip_prerelease": True, "min_asset_downloads": 0},
                 "enrich": [],
-                "runtime": {},
             },
         }
 
@@ -712,7 +713,6 @@ class PyPIDownloadsEnrichmentTest(unittest.TestCase):
                 "fetch": {"window_days": 7, "limit": 1, "fetch_downloads": True},
                 "filters": {"skip_prerelease": True, "skip_yanked": True},
                 "enrich": [],
-                "runtime": {},
             },
         }
 
@@ -765,7 +765,6 @@ class LobstersEnrichmentTest(unittest.TestCase):
                 "fetch": {"window_days": 7, "limit": 1, "comments_to_keep": 10},
                 "filters": {"min_score": 0, "min_comments": 0, "tag_whitelist": [], "tag_blacklist": []},
                 "enrich": [],
-                "runtime": {},
             },
         }
 

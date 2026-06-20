@@ -120,7 +120,7 @@ class V2EXAdapter(SourceAdapterBase):
                     extra={
                         "topic_id": topic_id,
                         "node": topic.get("node", {}).get("title", ""),
-                        "rank_type": "top_clicked",
+                        "rank_type": "top_replies",
                         "source_tag": source_tag,
                     },
                     context_content={"post_content": post_content, "top_comments": []},
@@ -156,12 +156,11 @@ class V2EXAdapter(SourceAdapterBase):
             record.content = _build_discussion(record, top_replies)
         return records
 
-    def select(self, ctx: RunContext, records: list[SourceRecord], config: ScraperConfig) -> list[SourceRecord]:
+    def prune(self, ctx: RunContext, records: list[SourceRecord], config: ScraperConfig) -> list[SourceRecord]:
         limit = int(config.input.fetch.get("top_clicked_limit") or 10)
         ranked = sorted(
             records,
             key=lambda record: (
-                int(record.metrics.get("clicks") or 0),
                 int(record.metrics.get("replies") or 0),
                 record.source_published_date or datetime.min.replace(tzinfo=timezone.utc),
             ),

@@ -77,11 +77,6 @@ class LobstersAdapter(SourceAdapterBase):
         feed = str(input_value.source.get("feed") or "hottest")
         tags = [str(tag) for tag in input_value.source.get("tags", [])]
         window_days = int(input_value.fetch.get("window_days") or 0)
-        limit = int(input_value.fetch.get("limit") or 3)
-        min_score = int(input_value.filters.get("min_score") or 0)
-        min_comments = int(input_value.filters.get("min_comments") or 0)
-        whitelist = {str(tag) for tag in input_value.filters.get("tag_whitelist", [])}
-        blacklist = {str(tag) for tag in input_value.filters.get("tag_blacklist", [])}
         cutoff = datetime.now(timezone.utc) - timedelta(days=window_days) if window_days > 0 else None
 
         records: list[SourceRecord] = []
@@ -107,12 +102,6 @@ class LobstersAdapter(SourceAdapterBase):
                 score = int(story.get("score") or 0)
                 comment_count = int(story.get("comment_count") or 0)
                 story_tags = {str(item) for item in story.get("tags") or []}
-                if score < min_score or comment_count < min_comments:
-                    continue
-                if whitelist and not (story_tags & whitelist):
-                    continue
-                if blacklist and story_tags & blacklist:
-                    continue
                 seen.add(short_id)
                 records.append(
                     SourceRecord(
@@ -143,7 +132,30 @@ class LobstersAdapter(SourceAdapterBase):
                     )
                 )
 
-        records.sort(
+        return records
+
+    def prune(self, ctx: RunContext, records: list[SourceRecord], config: ScraperConfig) -> list[SourceRecord]:
+        input_value = config.input
+        limit = int(input_value.fetch.get("limit") or 3)
+        min_score = int(input_value.filters.get("min_score") or 0)
+        min_comments = int(input_value.filters.get("min_comments") or 0)
+        whitelist = {str(tag) for tag in input_value.filters.get("tag_whitelist", [])}
+        blacklist = {str(tag) for tag in input_value.filters.get("tag_blacklist", [])}
+
+        filtered = []
+        for record in records:
+            score = int(record.metrics.get("score") or 0)
+            comment_count = int(record.metrics.get("comment_count") or 0)
+            story_tags = {str(item) for item in record.extra.get("tags") or []}
+            if score < min_score or comment_count < min_comments:
+                continue
+            if whitelist and not (story_tags & whitelist):
+                continue
+            if blacklist and story_tags & blacklist:
+                continue
+            filtered.append(record)
+
+        filtered.sort(
             key=lambda item: (
                 int(item.metrics.get("score") or 0),
                 int(item.metrics.get("comment_count") or 0),
@@ -151,7 +163,7 @@ class LobstersAdapter(SourceAdapterBase):
             ),
             reverse=True,
         )
-        return records[:limit]
+        return filtered[:limit]
 
     def _fetch_top_comments(self, short_id: str, limit: int) -> list[dict]:
         if not short_id or limit <= 0:

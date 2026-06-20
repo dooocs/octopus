@@ -310,7 +310,6 @@ class GitHubSearchAdapter(_GitHubRepoEnricher):
         if not token:
             return []
         fetch = config.input.fetch
-        min_stars = int(config.input.filters.get("min_stars") or 0)
         fetch_days = int(fetch.get("fetch_window_days") or 7)
         last_week = (datetime.now() - timedelta(days=fetch_days)).strftime("%Y-%m-%d")
         per_page = int(fetch.get("per_page") or 30)
@@ -333,8 +332,6 @@ class GitHubSearchAdapter(_GitHubRepoEnricher):
                 if url in seen:
                     continue
                 stars = int(repo.get("stargazers_count") or 0)
-                if stars < min_stars:
-                    continue
                 seen.add(url)
                 owner = repo["owner"]["login"]
                 repo_name = repo["name"]
@@ -367,3 +364,7 @@ class GitHubSearchAdapter(_GitHubRepoEnricher):
                     )
                 )
         return records
+
+    def prune(self, ctx: RunContext, records: list[SourceRecord], config: ScraperConfig) -> list[SourceRecord]:
+        min_stars = int(config.input.filters.get("min_stars") or 0)
+        return [record for record in records if int(record.metrics.get("stars") or 0) >= min_stars]

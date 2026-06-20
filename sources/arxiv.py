@@ -117,12 +117,9 @@ class ArxivAdapter(SourceAdapterBase):
     def discover(self, ctx: RunContext, config: ScraperConfig) -> list[SourceRecord]:
         input_value = config.input
         max_results = int(input_value.fetch.get("max_results") or 25)
-        limit = int(input_value.fetch.get("limit") or 3)
         window_days = int(input_value.fetch.get("window_days") or 0)
         sort_by = str(input_value.fetch.get("sort_by") or "submittedDate")
         sort_order = str(input_value.fetch.get("sort_order") or "descending")
-        include_terms = [str(term) for term in input_value.filters.get("include_terms", [])]
-        exclude_terms = [str(term) for term in input_value.filters.get("exclude_terms", [])]
         cutoff = datetime.now(timezone.utc) - timedelta(days=window_days) if window_days > 0 else None
 
         records: list[SourceRecord] = []
@@ -155,7 +152,7 @@ class ArxivAdapter(SourceAdapterBase):
                     continue
                 title = _text(getattr(entry, "title", ""))
                 summary = _text(getattr(entry, "summary", ""))
-                if not title or not _matches_terms(title, summary, include_terms, exclude_terms):
+                if not title:
                     continue
                 seen.add(native_id)
                 categories = _entry_categories(entry)
@@ -190,8 +187,20 @@ class ArxivAdapter(SourceAdapterBase):
                     )
                 )
 
-        records.sort(key=lambda item: item.source_published_date or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
-        return records[:limit]
+        return records
+
+    def prune(self, ctx: RunContext, records: list[SourceRecord], config: ScraperConfig) -> list[SourceRecord]:
+        input_value = config.input
+        limit = int(input_value.fetch.get("limit") or 3)
+        include_terms = [str(term) for term in input_value.filters.get("include_terms", [])]
+        exclude_terms = [str(term) for term in input_value.filters.get("exclude_terms", [])]
+        filtered = [
+            record
+            for record in records
+            if _matches_terms(record.title, record.content, include_terms, exclude_terms)
+        ]
+        filtered.sort(key=lambda item: item.source_published_date or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
+        return filtered[:limit]
 
     def enrich(
         self,

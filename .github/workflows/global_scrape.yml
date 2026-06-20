@@ -60,6 +60,38 @@ jobs:
       - name: Install dependencies
         run: python -m pip install .
 
+      - name: Remove legacy runtime input
+        run: |
+          python - <<'PY'
+          from scripts.octp_supabase import SupabaseRestClient
+
+          client = SupabaseRestClient.from_env()
+          rows = client.fetch_config_rows()
+          with_runtime = [
+              row
+              for row in rows
+              if isinstance(row.get("input"), dict) and "runtime" in row["input"]
+          ]
+          print(f"configs_with_runtime_before={len(with_runtime)}")
+          for row in with_runtime:
+              input_value = dict(row["input"])
+              input_value.pop("runtime", None)
+              client.update_scraper_config_input(
+                  str(row["id"]),
+                  input_value=input_value,
+                  input_schema_version=int(row.get("input_schema_version") or 1),
+              )
+          rows_after = client.fetch_config_rows()
+          remaining = [
+              row
+              for row in rows_after
+              if isinstance(row.get("input"), dict) and "runtime" in row["input"]
+          ]
+          print(f"configs_with_runtime_after={len(remaining)}")
+          if remaining:
+              raise SystemExit("legacy runtime input cleanup failed")
+          PY
+
       - name: Run global scrape
         run: |
           ARGS=(--continue-on-error --output outputs/global_scrape/raw_items.jsonl)

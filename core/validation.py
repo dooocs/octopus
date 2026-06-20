@@ -12,7 +12,7 @@ from .contracts import ChannelSpec, InputConfig, RawItem, ScraperConfig
 
 BASE_INPUT_SCHEMA: dict[str, Any] = {
     "type": "object",
-    "required": ["source", "fetch", "filters", "enrich", "runtime"],
+    "required": ["source", "fetch", "filters", "enrich"],
     "additionalProperties": False,
     "properties": {
         "source": {"type": "object"},
@@ -30,7 +30,6 @@ BASE_INPUT_SCHEMA: dict[str, Any] = {
                 "additionalProperties": True,
             },
         },
-        "runtime": {"type": "object"},
     },
 }
 

@@ -68,13 +68,8 @@ class HuggingFaceModelsAdapter(SourceAdapterBase):
 
     def discover(self, ctx: RunContext, config: ScraperConfig) -> list[SourceRecord]:
         fetch = config.input.fetch
-        filters = config.input.filters
         max_retries = int(fetch.get("max_retries") or 3)
         limit = int(fetch.get("limit") or 3)
-        min_likes = int(filters.get("min_likes") or 50)
-        min_downloads = int(filters.get("min_downloads") or 1000)
-        quant_suffixes = filters.get("quant_suffixes") or DEFAULT_QUANT_SUFFIXES
-        deriv_suffixes = filters.get("deriv_suffixes") or DEFAULT_DERIV_SUFFIXES
 
         resp = _retry_get(HF_MODELS_URL, params={"sort": "trendingScore", "limit": limit}, max_retries=max_retries, timeout=20)
         if resp.status_code != 200:
@@ -90,17 +85,8 @@ class HuggingFaceModelsAdapter(SourceAdapterBase):
                 continue
             likes = int(model.get("likes") or 0)
             downloads = int(model.get("downloads") or 0)
-            if likes < min_likes or downloads < min_downloads:
-                continue
-            model_id_lower = model_id.lower()
-            if any(suffix in model_id_lower for suffix in quant_suffixes):
-                continue
-            if any(suffix in model_id_lower for suffix in deriv_suffixes):
-                continue
             card_data = model.get("cardData", {}) or {}
             base_model = card_data.get("base_model", "")
-            if base_model:
-                continue
             description = card_data.get("description", "") or model.get("description", "")
             published_at = None
             if model.get("createdAt"):
@@ -129,6 +115,29 @@ class HuggingFaceModelsAdapter(SourceAdapterBase):
                 )
             )
         return records
+
+    def prune(self, ctx: RunContext, records: list[SourceRecord], config: ScraperConfig) -> list[SourceRecord]:
+        filters = config.input.filters
+        min_likes = int(filters.get("min_likes") or 50)
+        min_downloads = int(filters.get("min_downloads") or 1000)
+        quant_suffixes = filters.get("quant_suffixes") or DEFAULT_QUANT_SUFFIXES
+        deriv_suffixes = filters.get("deriv_suffixes") or DEFAULT_DERIV_SUFFIXES
+
+        pruned: list[SourceRecord] = []
+        for record in records:
+            if int(record.metrics.get("likes") or 0) < min_likes:
+                continue
+            if int(record.metrics.get("downloads") or 0) < min_downloads:
+                continue
+            model_id_lower = str(record.extra.get("model_id") or record.title).lower()
+            if any(suffix in model_id_lower for suffix in quant_suffixes):
+                continue
+            if any(suffix in model_id_lower for suffix in deriv_suffixes):
+                continue
+            if record.extra.get("base_model"):
+                continue
+            pruned.append(record)
+        return pruned
 
     def normalize(self, ctx: RunContext, record: SourceRecord, config: ScraperConfig) -> RawItem:
         return _raw_item(config, record)

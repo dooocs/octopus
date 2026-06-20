@@ -28,16 +28,16 @@ def run_config(
         on_stage("discover")
     records = adapter.discover(ctx, config)
     if on_stage:
-        on_stage("enrich")
-    enriched = adapter.enrich(ctx, records, config)
+        on_stage("prune")
+    pruned = adapter.prune(ctx, records, config)
     if on_stage:
-        on_stage("select")
-    selected = adapter.select(ctx, enriched, config)
+        on_stage("enrich")
+    enriched = adapter.enrich(ctx, pruned, config)
 
     if on_stage:
         on_stage("normalize")
     items = []
-    for record in selected:
+    for record in enriched:
         item = adapter.normalize(ctx, record, config)
         item.snapshot_date = snapshot_date
         item.scraper_slug = config.sub_source_type
@@ -65,7 +65,7 @@ def run_config(
     return ScrapeTaskResult(
         rows=rows,
         items_discovered=len(records),
-        items_filtered=len(selected),
+        items_filtered=len(pruned),
         items_enriched=len(enriched),
         state=ctx.state,
     )

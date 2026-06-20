@@ -12,7 +12,7 @@ def input_schema(
 ) -> dict[str, Any]:
     return {
         "type": "object",
-        "required": ["source", "fetch", "filters", "enrich", "runtime"],
+        "required": ["source", "fetch", "filters", "enrich"],
         "additionalProperties": False,
         "properties": {
             "source": {"type": "object", "additionalProperties": False, "properties": source or {}},
@@ -30,16 +30,6 @@ def input_schema(
                     "additionalProperties": True,
                 },
             },
-            "runtime": {
-                "type": "object",
-                "additionalProperties": False,
-                "properties": {
-                    "timeout": {"type": "number", "minimum": 1},
-                    "retries": {"type": "integer", "minimum": 0},
-                    "concurrency": {"type": "integer", "minimum": 1},
-                    "rate_limit": {"type": "object"},
-                },
-            },
         },
     }
 
@@ -50,14 +40,12 @@ def default_input(
     fetch: dict[str, Any] | None = None,
     filters: dict[str, Any] | None = None,
     enrich: list[dict[str, Any]] | None = None,
-    runtime: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     return {
         "source": source or {},
         "fetch": fetch or {},
         "filters": filters or {},
         "enrich": enrich or [],
-        "runtime": runtime or {},
     }
 
 

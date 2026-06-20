@@ -103,7 +103,6 @@ class NpmPackageReleasesAdapter(SourceAdapterBase):
         input_value = config.input
         search_size = int(input_value.fetch.get("search_size") or 25)
         window_days = int(input_value.fetch.get("window_days") or 0)
-        skip_prerelease = bool(input_value.filters.get("skip_prerelease", True))
         cutoff = datetime.now(timezone.utc) - timedelta(days=window_days) if window_days > 0 else None
 
         records: list[SourceRecord] = []
@@ -117,7 +116,7 @@ class NpmPackageReleasesAdapter(SourceAdapterBase):
             )
             response.raise_for_status()
             for obj in response.json().get("objects", []):
-                record = self._record_from_search_object(obj, str(query.get("label") or query["q"]), cutoff, skip_prerelease)
+                record = self._record_from_search_object(obj, str(query.get("label") or query["q"]), cutoff)
                 if record is None:
                     continue
                 if record.identity in seen:
@@ -126,7 +125,7 @@ class NpmPackageReleasesAdapter(SourceAdapterBase):
                 records.append(record)
 
         for package_name in input_value.source.get("packages", []):
-            record = self._record_from_package(str(package_name), cutoff, skip_prerelease)
+            record = self._record_from_package(str(package_name), cutoff)
             if record is None:
                 continue
             if record.identity in seen:
@@ -141,14 +140,11 @@ class NpmPackageReleasesAdapter(SourceAdapterBase):
         obj: dict[str, Any],
         label: str,
         cutoff: datetime | None,
-        skip_prerelease: bool,
     ) -> SourceRecord | None:
         package = obj.get("package") or {}
         name = str(package.get("name") or "")
         version = str(package.get("version") or "")
         if not name or not version:
-            return None
-        if skip_prerelease and _is_prerelease(version):
             return None
         published_at = _parse_datetime(package.get("date") or obj.get("updated"))
         if cutoff and published_at and published_at < cutoff:
@@ -178,6 +174,7 @@ class NpmPackageReleasesAdapter(SourceAdapterBase):
                 "ecosystem": "npm",
                 "package": name,
                 "version": version,
+                "is_prerelease": _is_prerelease(version),
                 "query_label": label,
                 "keywords": package.get("keywords") or [],
                 "license": package.get("license"),
@@ -193,7 +190,6 @@ class NpmPackageReleasesAdapter(SourceAdapterBase):
         self,
         package_name: str,
         cutoff: datetime | None,
-        skip_prerelease: bool,
     ) -> SourceRecord | None:
         response = http_get(
             f"{NPM_PACKAGE_URL}/{_npm_package_path(package_name)}",
@@ -206,8 +202,6 @@ class NpmPackageReleasesAdapter(SourceAdapterBase):
         data = response.json()
         version = str((data.get("dist-tags") or {}).get("latest") or "")
         if not version:
-            return None
-        if skip_prerelease and _is_prerelease(version):
             return None
         published_at = _parse_datetime((data.get("time") or {}).get(version))
         if cutoff and published_at and published_at < cutoff:
@@ -228,6 +222,7 @@ class NpmPackageReleasesAdapter(SourceAdapterBase):
                 "ecosystem": "npm",
                 "package": package_name,
                 "version": version,
+                "is_prerelease": _is_prerelease(version),
                 "query_label": "watched_package",
                 "keywords": version_data.get("keywords") or data.get("keywords") or [],
                 "license": version_data.get("license") or data.get("license"),
@@ -237,6 +232,24 @@ class NpmPackageReleasesAdapter(SourceAdapterBase):
             author_id=_author_name(version_data.get("author") or data.get("author")),
             source_published_date=published_at,
         )
+
+    def prune(self, ctx: RunContext, records: list[SourceRecord], config: ScraperConfig) -> list[SourceRecord]:
+        skip_prerelease = bool(config.input.filters.get("skip_prerelease", True))
+        limit = int(config.input.fetch.get("limit") or 3)
+        pruned = [
+            record
+            for record in records
+            if not (skip_prerelease and record.extra.get("is_prerelease"))
+        ]
+        pruned.sort(
+            key=lambda item: (
+                item.source_published_date or datetime.min.replace(tzinfo=timezone.utc),
+                str(item.extra.get("query_label") or ""),
+                str(item.extra.get("package") or ""),
+            ),
+            reverse=True,
+        )
+        return pruned[:limit]
 
     def _downloads(self, package_name: str, period: str) -> int:
         try:
@@ -257,9 +270,6 @@ class NpmPackageReleasesAdapter(SourceAdapterBase):
         records: list[SourceRecord],
         config: ScraperConfig,
     ) -> list[SourceRecord]:
-        input_value = config.input
-        min_weekly_downloads = int(input_value.filters.get("min_weekly_downloads") or 0)
-        limit = int(input_value.fetch.get("limit") or 3)
         for record in records:
             if record.extra.get("query_label") == "watched_package":
                 package_name = str(record.extra.get("package") or "")
@@ -289,17 +299,7 @@ class NpmPackageReleasesAdapter(SourceAdapterBase):
                     description = str(package.get("description") or "")
                 record.context_content["release_notes"] = description or record.content
                 record.context_content["downloads_source"] = "npm_search_api"
-
-        filtered = [record for record in records if _safe_int(record.metrics.get("downloads_weekly")) >= min_weekly_downloads]
-        filtered.sort(
-            key=lambda item: (
-                _safe_int(item.metrics.get("downloads_weekly")),
-                _safe_int(item.metrics.get("dependents")),
-                item.source_published_date or datetime.min.replace(tzinfo=timezone.utc),
-            ),
-            reverse=True,
-        )
-        return filtered[:limit]
+        return records
 
     def normalize(self, ctx: RunContext, record: SourceRecord, config: ScraperConfig) -> RawItem:
         return RawItem(
@@ -346,14 +346,33 @@ class PyPIPackageReleasesAdapter(SourceAdapterBase):
     def discover(self, ctx: RunContext, config: ScraperConfig) -> list[SourceRecord]:
         input_value = config.input
         window_days = int(input_value.fetch.get("window_days") or 0)
-        skip_prerelease = bool(input_value.filters.get("skip_prerelease", True))
-        skip_yanked = bool(input_value.filters.get("skip_yanked", True))
         cutoff = datetime.now(timezone.utc) - timedelta(days=window_days) if window_days > 0 else None
 
         records: list[SourceRecord] = []
         for package_name in input_value.source.get("packages", []):
-            records.extend(self._records_for_package(str(package_name), cutoff, skip_prerelease, skip_yanked))
+            records.extend(self._records_for_package(str(package_name), cutoff))
         return records
+
+    def prune(self, ctx: RunContext, records: list[SourceRecord], config: ScraperConfig) -> list[SourceRecord]:
+        limit = int(config.input.fetch.get("limit") or 3)
+        skip_prerelease = bool(config.input.filters.get("skip_prerelease", True))
+        skip_yanked = bool(config.input.filters.get("skip_yanked", True))
+        pruned: list[SourceRecord] = []
+        for record in records:
+            if skip_prerelease and record.extra.get("is_prerelease"):
+                continue
+            if skip_yanked and int(record.metrics.get("yanked_count") or 0) >= int(record.metrics.get("file_count") or 0):
+                continue
+            pruned.append(record)
+        pruned.sort(
+            key=lambda item: (
+                item.source_published_date or datetime.min.replace(tzinfo=timezone.utc),
+                int(item.metrics.get("file_count") or 0),
+                str(item.extra.get("package") or ""),
+            ),
+            reverse=True,
+        )
+        return pruned[:limit]
 
     def enrich(
         self,
@@ -361,7 +380,6 @@ class PyPIPackageReleasesAdapter(SourceAdapterBase):
         records: list[SourceRecord],
         config: ScraperConfig,
     ) -> list[SourceRecord]:
-        limit = int(config.input.fetch.get("limit") or 3)
         fetch_downloads = bool(config.input.fetch.get("fetch_downloads", True))
         downloads_by_package: dict[str, dict[str, int]] = {}
         for record in records:
@@ -377,23 +395,12 @@ class PyPIPackageReleasesAdapter(SourceAdapterBase):
             release_notes = record.raw.get("release_notes") if isinstance(record.raw, dict) else ""
             record.context_content["release_notes"] = str(release_notes or record.content or "")
             record.context_content["downloads_source"] = "pypistats_recent_api" if downloads_available else "pypistats_unavailable"
-        records.sort(
-            key=lambda item: (
-                _safe_int(item.metrics.get("downloads_last_month")),
-                _safe_int(item.metrics.get("downloads_last_week")),
-                item.source_published_date or datetime.min.replace(tzinfo=timezone.utc),
-                _safe_int(item.metrics.get("file_count")),
-            ),
-            reverse=True,
-        )
-        return records[:limit]
+        return records
 
     def _records_for_package(
         self,
         package_name: str,
         cutoff: datetime | None,
-        skip_prerelease: bool,
-        skip_yanked: bool,
     ) -> list[SourceRecord]:
         response = http_get(
             f"{PYPI_PACKAGE_URL}/{quote(package_name)}/json",
@@ -413,8 +420,6 @@ class PyPIPackageReleasesAdapter(SourceAdapterBase):
         )
         records: list[SourceRecord] = []
         for version, files in (data.get("releases") or {}).items():
-            if skip_prerelease and _is_prerelease(str(version)):
-                continue
             if not isinstance(files, list) or not files:
                 continue
             uploaded_dates = [_parse_datetime(item.get("upload_time_iso_8601")) for item in files]
@@ -425,8 +430,6 @@ class PyPIPackageReleasesAdapter(SourceAdapterBase):
             if cutoff and published_at < cutoff:
                 continue
             yanked_count = sum(1 for item in files if item.get("yanked"))
-            if skip_yanked and yanked_count == len(files):
-                continue
             records.append(
                 SourceRecord(
                     identity=f"pypi:{package_name}=={version}",
@@ -452,6 +455,7 @@ class PyPIPackageReleasesAdapter(SourceAdapterBase):
                         "ecosystem": "pypi",
                         "package": package_name,
                         "version": version,
+                        "is_prerelease": _is_prerelease(str(version)),
                         "license": info.get("license_expression") or info.get("license"),
                         "requires_python": info.get("requires_python"),
                         "project_urls": info.get("project_urls") or {},

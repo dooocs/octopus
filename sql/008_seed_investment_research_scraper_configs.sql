@@ -81,12 +81,7 @@ filing_configs as (
         'fetch_window_hours', 720
       ),
       'filters', '{}'::jsonb,
-      'enrich', '[]'::jsonb,
-      'runtime', jsonb_build_object(
-        'timeout', 15,
-        'retries', 2,
-        'rate_limit', jsonb_build_object('requests_per_second', 8)
-      )
+      'enrich', '[]'::jsonb
     ) as input
   from company_filings
 )
@@ -174,11 +169,7 @@ official_configs as (
         'fetch_window_hours', 168
       ),
       'filters', '{}'::jsonb,
-      'enrich', '[]'::jsonb,
-      'runtime', jsonb_build_object(
-        'timeout', 15,
-        'retries', 2
-      )
+      'enrich', '[]'::jsonb
     ) as input
   from official_feed_configs
 )
@@ -260,11 +251,7 @@ broker_configs as (
         'fetch_window_hours', 0
       ),
       'filters', '{}'::jsonb,
-      'enrich', '[]'::jsonb,
-      'runtime', jsonb_build_object(
-        'timeout', 15,
-        'retries', 2
-      )
+      'enrich', '[]'::jsonb
     ) as input
   from broker_insight_configs
 )

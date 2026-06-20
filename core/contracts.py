@@ -6,7 +6,7 @@ from datetime import date, datetime, timezone
 from typing import Any, Mapping, Protocol, runtime_checkable
 
 
-INPUT_KEYS = ("source", "fetch", "filters", "enrich", "runtime")
+INPUT_KEYS = ("source", "fetch", "filters", "enrich")
 
 
 def _utc_now_iso() -> str:
@@ -43,7 +43,6 @@ class InputConfig:
     fetch: dict[str, Any] = field(default_factory=dict)
     filters: dict[str, Any] = field(default_factory=dict)
     enrich: list[dict[str, Any]] = field(default_factory=list)
-    runtime: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
     def from_mapping(cls, value: Mapping[str, Any]) -> "InputConfig":
@@ -69,7 +68,6 @@ class InputConfig:
             fetch=_json_object(value.get("fetch"), field_name="input.fetch"),
             filters=_json_object(value.get("filters"), field_name="input.filters"),
             enrich=normalized_enrich,
-            runtime=_json_object(value.get("runtime"), field_name="input.runtime"),
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -78,7 +76,6 @@ class InputConfig:
             "fetch": dict(self.fetch),
             "filters": dict(self.filters),
             "enrich": [dict(item) for item in self.enrich],
-            "runtime": dict(self.runtime),
         }
 
 
@@ -333,7 +330,7 @@ class SourceAdapterBase:
     ) -> list[SourceRecord]:
         return records
 
-    def select(
+    def prune(
         self,
         ctx: RunContext,
         records: list[SourceRecord],
@@ -357,7 +354,7 @@ class SourceAdapter(Protocol):
     ) -> list[SourceRecord]:
         ...
 
-    def select(
+    def prune(
         self,
         ctx: RunContext,
         records: list[SourceRecord],

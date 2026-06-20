@@ -25,15 +25,15 @@ class _FakeTextResponse:
 
 
 class InputConfigContractTest(unittest.TestCase):
-    def test_input_config_requires_exact_five_top_level_keys(self) -> None:
-        valid = {"source": {}, "fetch": {}, "filters": {}, "enrich": [], "runtime": {}}
+    def test_input_config_requires_exact_four_top_level_keys(self) -> None:
+        valid = {"source": {}, "fetch": {}, "filters": {}, "enrich": []}
         self.assertEqual(InputConfig.from_mapping(valid).to_dict(), valid)
 
         with self.assertRaises(ValueError):
-            InputConfig.from_mapping({"source": {}, "fetch": {}, "filters": {}, "runtime": {}})
+            InputConfig.from_mapping({"source": {}, "fetch": {}, "filters": {}})
 
         with self.assertRaises(ValueError):
-            InputConfig.from_mapping({**valid, "output_fields": []})
+            InputConfig.from_mapping({**valid, "runtime": {}})
 
 
 class RawItemContractTest(unittest.TestCase):
@@ -103,7 +103,6 @@ class ResearchMetadataTest(unittest.TestCase):
                 "fetch": {"max_items": 1, "fetch_window_hours": 876000},
                 "filters": {},
                 "enrich": [],
-                "runtime": {},
             },
         }
 
@@ -118,7 +117,7 @@ class ResearchMetadataTest(unittest.TestCase):
 
 
 class MigrationContractTest(unittest.TestCase):
-    def test_convert_flat_github_search_input_to_five_part_input(self) -> None:
+    def test_convert_flat_github_search_input_to_four_part_input(self) -> None:
         converted = convert_flat_input(
             "github_search",
             {
@@ -129,9 +128,26 @@ class MigrationContractTest(unittest.TestCase):
             },
         )
 
-        self.assertEqual(set(converted.keys()), {"source", "fetch", "filters", "enrich", "runtime"})
+        self.assertEqual(set(converted.keys()), {"source", "fetch", "filters", "enrich"})
         self.assertEqual(converted["source"]["queries"][0]["label"], "ai")
         self.assertEqual(converted["filters"], {"min_stars": 100})
+
+    def test_convert_legacy_five_part_input_drops_runtime(self) -> None:
+        converted = convert_flat_input(
+            "rss",
+            {
+                "source": {"url": "https://example.com/feed.xml"},
+                "fetch": {"max_items": 5},
+                "filters": {},
+                "enrich": [],
+                "runtime": {"timeout": 10},
+            },
+        )
+
+        self.assertEqual(
+            converted,
+            {"source": {"url": "https://example.com/feed.xml"}, "fetch": {"max_items": 5}, "filters": {}, "enrich": []},
+        )
 
     def test_migrate_row_reports_unsupported_scraper(self) -> None:
         result = migrate_row(
@@ -157,17 +173,16 @@ class _TestAdapter(SourceAdapterBase):
         input_schema_version=1,
         input_schema={
             "type": "object",
-            "required": ["source", "fetch", "filters", "enrich", "runtime"],
+            "required": ["source", "fetch", "filters", "enrich"],
             "additionalProperties": False,
             "properties": {
                 "source": {"type": "object", "additionalProperties": False, "properties": {}},
                 "fetch": {"type": "object", "additionalProperties": False, "properties": {}},
                 "filters": {"type": "object", "additionalProperties": False, "properties": {}},
                 "enrich": {"type": "array", "items": {"type": "object"}},
-                "runtime": {"type": "object", "additionalProperties": False, "properties": {}},
             },
         },
-        default_input={"source": {}, "fetch": {}, "filters": {}, "enrich": [], "runtime": {}},
+        default_input={"source": {}, "fetch": {}, "filters": {}, "enrich": []},
     )
 
     def discover(self, ctx: RunContext, config: ScraperConfig) -> list[SourceRecord]:
@@ -178,8 +193,18 @@ class _TestAdapter(SourceAdapterBase):
                 title="Example",
                 content="Body",
                 metrics={"score": 1},
+            ),
+            SourceRecord(
+                identity="native-2",
+                url="https://example.com/skip",
+                title="Skip",
+                content="Skip body",
+                metrics={"score": 0},
             )
         ]
+
+    def prune(self, ctx: RunContext, records: list[SourceRecord], config: ScraperConfig) -> list[SourceRecord]:
+        return [record for record in records if int(record.metrics.get("score") or 0) > 0]
 
     def enrich(
         self,
@@ -187,6 +212,7 @@ class _TestAdapter(SourceAdapterBase):
         records: list[SourceRecord],
         config: ScraperConfig,
     ) -> list[SourceRecord]:
+        ctx.state["enrich_input_count"] = len(records)
         return records
 
     def normalize(self, ctx: RunContext, record: SourceRecord, config: ScraperConfig) -> RawItem:
@@ -211,12 +237,16 @@ class RunnerContractTest(unittest.TestCase):
                 "source_type": "test",
                 "sub_source_type": "unit",
                 "item_type": "article",
-                "input": {"source": {}, "fetch": {}, "filters": {}, "enrich": [], "runtime": {}},
+                "input": {"source": {}, "fetch": {}, "filters": {}, "enrich": []},
             },
             "2026-06-19",
         )
 
-        self.assertEqual(result.items_discovered, 1)
+        self.assertEqual(result.items_discovered, 2)
+        self.assertEqual(result.items_filtered, 1)
+        self.assertEqual(result.items_enriched, 1)
+        self.assertEqual(result.state["enrich_input_count"], 1)
+        self.assertEqual(len(result.rows), 1)
         self.assertEqual(result.rows[0]["sub_source_type"], "unit")
         self.assertEqual(result.rows[0]["metrics"], {"score": 1})
 
@@ -231,13 +261,13 @@ class RunnerContractTest(unittest.TestCase):
                 "source_type": "test",
                 "sub_source_type": "unit",
                 "item_type": "article",
-                "input": {"source": {}, "fetch": {}, "filters": {}, "enrich": [], "runtime": {}},
+                "input": {"source": {}, "fetch": {}, "filters": {}, "enrich": []},
             },
             "2026-06-19",
             on_stage=stages.append,
         )
 
-        self.assertEqual(stages, ["discover", "enrich", "select", "normalize", "validate_output"])
+        self.assertEqual(stages, ["discover", "prune", "enrich", "normalize", "validate_output"])
 
 
 class SinkContractTest(unittest.TestCase):

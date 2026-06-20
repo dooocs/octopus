@@ -12,8 +12,7 @@
         "source",
         "fetch",
         "filters",
-        "enrich",
-        "runtime"
+        "enrich"
       ],
       "additionalProperties": false,
       "properties": {
@@ -85,27 +84,6 @@
             },
             "additionalProperties": true
           }
-        },
-        "runtime": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "timeout": {
-              "type": "number",
-              "minimum": 1
-            },
-            "retries": {
-              "type": "integer",
-              "minimum": 0
-            },
-            "concurrency": {
-              "type": "integer",
-              "minimum": 1
-            },
-            "rate_limit": {
-              "type": "object"
-            }
-          }
         }
       }
     },
@@ -128,8 +106,7 @@
           "name": "full_text",
           "when": "always"
         }
-      ],
-      "runtime": {}
+      ]
     },
     "required_secrets": [],
     "supported_enrichers": [
@@ -151,8 +128,7 @@
         "source",
         "fetch",
         "filters",
-        "enrich",
-        "runtime"
+        "enrich"
       ],
       "additionalProperties": false,
       "properties": {
@@ -247,27 +223,6 @@
             },
             "additionalProperties": true
           }
-        },
-        "runtime": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "timeout": {
-              "type": "number",
-              "minimum": 1
-            },
-            "retries": {
-              "type": "integer",
-              "minimum": 0
-            },
-            "concurrency": {
-              "type": "integer",
-              "minimum": 1
-            },
-            "rate_limit": {
-              "type": "object"
-            }
-          }
         }
       }
     },
@@ -291,8 +246,7 @@
         "include_terms": [],
         "exclude_terms": []
       },
-      "enrich": [],
-      "runtime": {}
+      "enrich": []
     },
     "required_secrets": [],
     "supported_enrichers": [],
@@ -312,8 +266,7 @@
         "source",
         "fetch",
         "filters",
-        "enrich",
-        "runtime"
+        "enrich"
       ],
       "additionalProperties": false,
       "properties": {
@@ -369,27 +322,6 @@
             },
             "additionalProperties": true
           }
-        },
-        "runtime": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "timeout": {
-              "type": "number",
-              "minimum": 1
-            },
-            "retries": {
-              "type": "integer",
-              "minimum": 0
-            },
-            "concurrency": {
-              "type": "integer",
-              "minimum": 1
-            },
-            "rate_limit": {
-              "type": "object"
-            }
-          }
         }
       }
     },
@@ -407,8 +339,7 @@
           "name": "top_replies",
           "when": "always"
         }
-      ],
-      "runtime": {}
+      ]
     },
     "required_secrets": [],
     "supported_enrichers": [
@@ -430,8 +361,7 @@
         "source",
         "fetch",
         "filters",
-        "enrich",
-        "runtime"
+        "enrich"
       ],
       "additionalProperties": false,
       "properties": {
@@ -487,27 +417,6 @@
             },
             "additionalProperties": true
           }
-        },
-        "runtime": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "timeout": {
-              "type": "number",
-              "minimum": 1
-            },
-            "retries": {
-              "type": "integer",
-              "minimum": 0
-            },
-            "concurrency": {
-              "type": "integer",
-              "minimum": 1
-            },
-            "rate_limit": {
-              "type": "object"
-            }
-          }
         }
       }
     },
@@ -525,8 +434,7 @@
           "name": "top_replies",
           "when": "always"
         }
-      ],
-      "runtime": {}
+      ]
     },
     "required_secrets": [],
     "supported_enrichers": [
@@ -548,8 +456,7 @@
         "source",
         "fetch",
         "filters",
-        "enrich",
-        "runtime"
+        "enrich"
       ],
       "additionalProperties": false,
       "properties": {
@@ -619,27 +526,6 @@
             },
             "additionalProperties": true
           }
-        },
-        "runtime": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "timeout": {
-              "type": "number",
-              "minimum": 1
-            },
-            "retries": {
-              "type": "integer",
-              "minimum": 0
-            },
-            "concurrency": {
-              "type": "integer",
-              "minimum": 1
-            },
-            "rate_limit": {
-              "type": "object"
-            }
-          }
         }
       }
     },
@@ -671,8 +557,7 @@
           "name": "release_details",
           "when": "always"
         }
-      ],
-      "runtime": {}
+      ]
     },
     "required_secrets": [],
     "supported_enrichers": [
@@ -694,8 +579,7 @@
         "source",
         "fetch",
         "filters",
-        "enrich",
-        "runtime"
+        "enrich"
       ],
       "additionalProperties": false,
       "properties": {
@@ -777,27 +661,6 @@
             },
             "additionalProperties": true
           }
-        },
-        "runtime": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "timeout": {
-              "type": "number",
-              "minimum": 1
-            },
-            "retries": {
-              "type": "integer",
-              "minimum": 0
-            },
-            "concurrency": {
-              "type": "integer",
-              "minimum": 1
-            },
-            "rate_limit": {
-              "type": "object"
-            }
-          }
         }
       }
     },
@@ -834,8 +697,7 @@
           "name": "star_history",
           "when": "always"
         }
-      ],
-      "runtime": {}
+      ]
     },
     "required_secrets": [
       "GH_MODELS_TOKEN"
@@ -862,8 +724,7 @@
         "source",
         "fetch",
         "filters",
-        "enrich",
-        "runtime"
+        "enrich"
       ],
       "additionalProperties": false,
       "properties": {
@@ -909,27 +770,6 @@
             },
             "additionalProperties": true
           }
-        },
-        "runtime": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "timeout": {
-              "type": "number",
-              "minimum": 1
-            },
-            "retries": {
-              "type": "integer",
-              "minimum": 0
-            },
-            "concurrency": {
-              "type": "integer",
-              "minimum": 1
-            },
-            "rate_limit": {
-              "type": "object"
-            }
-          }
         }
       }
     },
@@ -956,8 +796,7 @@
           "name": "star_history",
           "when": "always"
         }
-      ],
-      "runtime": {}
+      ]
     },
     "required_secrets": [
       "GH_MODELS_TOKEN"
@@ -984,8 +823,7 @@
         "source",
         "fetch",
         "filters",
-        "enrich",
-        "runtime"
+        "enrich"
       ],
       "additionalProperties": false,
       "properties": {
@@ -1055,27 +893,6 @@
             },
             "additionalProperties": true
           }
-        },
-        "runtime": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "timeout": {
-              "type": "number",
-              "minimum": 1
-            },
-            "retries": {
-              "type": "integer",
-              "minimum": 0
-            },
-            "concurrency": {
-              "type": "integer",
-              "minimum": 1
-            },
-            "rate_limit": {
-              "type": "object"
-            }
-          }
         }
       }
     },
@@ -1108,8 +925,7 @@
           "name": "top_comments",
           "when": "always"
         }
-      ],
-      "runtime": {}
+      ]
     },
     "required_secrets": [],
     "supported_enrichers": [
@@ -1132,8 +948,7 @@
         "source",
         "fetch",
         "filters",
-        "enrich",
-        "runtime"
+        "enrich"
       ],
       "additionalProperties": false,
       "properties": {
@@ -1196,27 +1011,6 @@
             },
             "additionalProperties": true
           }
-        },
-        "runtime": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "timeout": {
-              "type": "number",
-              "minimum": 1
-            },
-            "retries": {
-              "type": "integer",
-              "minimum": 0
-            },
-            "concurrency": {
-              "type": "integer",
-              "minimum": 1
-            },
-            "rate_limit": {
-              "type": "object"
-            }
-          }
         }
       }
     },
@@ -1230,8 +1024,7 @@
         "min_likes": 50,
         "min_downloads": 1000
       },
-      "enrich": [],
-      "runtime": {}
+      "enrich": []
     },
     "required_secrets": [],
     "supported_enrichers": [],
@@ -1251,8 +1044,7 @@
         "source",
         "fetch",
         "filters",
-        "enrich",
-        "runtime"
+        "enrich"
       ],
       "additionalProperties": false,
       "properties": {
@@ -1296,27 +1088,6 @@
             },
             "additionalProperties": true
           }
-        },
-        "runtime": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "timeout": {
-              "type": "number",
-              "minimum": 1
-            },
-            "retries": {
-              "type": "integer",
-              "minimum": 0
-            },
-            "concurrency": {
-              "type": "integer",
-              "minimum": 1
-            },
-            "rate_limit": {
-              "type": "object"
-            }
-          }
         }
       }
     },
@@ -1327,8 +1098,7 @@
         "max_retries": 3
       },
       "filters": {},
-      "enrich": [],
-      "runtime": {}
+      "enrich": []
     },
     "required_secrets": [],
     "supported_enrichers": [],
@@ -1348,8 +1118,7 @@
         "source",
         "fetch",
         "filters",
-        "enrich",
-        "runtime"
+        "enrich"
       ],
       "additionalProperties": false,
       "properties": {
@@ -1427,27 +1196,6 @@
             },
             "additionalProperties": true
           }
-        },
-        "runtime": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "timeout": {
-              "type": "number",
-              "minimum": 1
-            },
-            "retries": {
-              "type": "integer",
-              "minimum": 0
-            },
-            "concurrency": {
-              "type": "integer",
-              "minimum": 1
-            },
-            "rate_limit": {
-              "type": "object"
-            }
-          }
         }
       }
     },
@@ -1472,8 +1220,7 @@
           "name": "top_comments",
           "when": "always"
         }
-      ],
-      "runtime": {}
+      ]
     },
     "required_secrets": [],
     "supported_enrichers": [
@@ -1495,8 +1242,7 @@
         "source",
         "fetch",
         "filters",
-        "enrich",
-        "runtime"
+        "enrich"
       ],
       "additionalProperties": false,
       "properties": {
@@ -1578,27 +1324,6 @@
             },
             "additionalProperties": true
           }
-        },
-        "runtime": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "timeout": {
-              "type": "number",
-              "minimum": 1
-            },
-            "retries": {
-              "type": "integer",
-              "minimum": 0
-            },
-            "concurrency": {
-              "type": "integer",
-              "minimum": 1
-            },
-            "rate_limit": {
-              "type": "object"
-            }
-          }
         }
       }
     },
@@ -1632,8 +1357,7 @@
           "name": "release_metadata",
           "when": "always"
         }
-      ],
-      "runtime": {}
+      ]
     },
     "required_secrets": [],
     "supported_enrichers": [
@@ -1655,8 +1379,7 @@
         "source",
         "fetch",
         "filters",
-        "enrich",
-        "runtime"
+        "enrich"
       ],
       "additionalProperties": false,
       "properties": {
@@ -1729,27 +1452,6 @@
             },
             "additionalProperties": true
           }
-        },
-        "runtime": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "timeout": {
-              "type": "number",
-              "minimum": 1
-            },
-            "retries": {
-              "type": "integer",
-              "minimum": 0
-            },
-            "concurrency": {
-              "type": "integer",
-              "minimum": 1
-            },
-            "rate_limit": {
-              "type": "object"
-            }
-          }
         }
       }
     },
@@ -1774,8 +1476,7 @@
           "name": "openreview_replies",
           "when": "always"
         }
-      ],
-      "runtime": {}
+      ]
     },
     "required_secrets": [],
     "supported_enrichers": [
@@ -1797,8 +1498,7 @@
         "source",
         "fetch",
         "filters",
-        "enrich",
-        "runtime"
+        "enrich"
       ],
       "additionalProperties": false,
       "properties": {
@@ -1861,27 +1561,6 @@
             },
             "additionalProperties": true
           }
-        },
-        "runtime": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "timeout": {
-              "type": "number",
-              "minimum": 1
-            },
-            "retries": {
-              "type": "integer",
-              "minimum": 0
-            },
-            "concurrency": {
-              "type": "integer",
-              "minimum": 1
-            },
-            "rate_limit": {
-              "type": "object"
-            }
-          }
         }
       }
     },
@@ -1900,8 +1579,7 @@
           "name": "product_comments",
           "when": "always"
         }
-      ],
-      "runtime": {}
+      ]
     },
     "required_secrets": [
       "PRODUCTHUNT_TOKEN"
@@ -1925,8 +1603,7 @@
         "source",
         "fetch",
         "filters",
-        "enrich",
-        "runtime"
+        "enrich"
       ],
       "additionalProperties": false,
       "properties": {
@@ -1989,27 +1666,6 @@
             },
             "additionalProperties": true
           }
-        },
-        "runtime": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "timeout": {
-              "type": "number",
-              "minimum": 1
-            },
-            "retries": {
-              "type": "integer",
-              "minimum": 0
-            },
-            "concurrency": {
-              "type": "integer",
-              "minimum": 1
-            },
-            "rate_limit": {
-              "type": "object"
-            }
-          }
         }
       }
     },
@@ -2039,8 +1695,7 @@
           "name": "release_metadata",
           "when": "always"
         }
-      ],
-      "runtime": {}
+      ]
     },
     "required_secrets": [],
     "supported_enrichers": [
@@ -2062,8 +1717,7 @@
         "source",
         "fetch",
         "filters",
-        "enrich",
-        "runtime"
+        "enrich"
       ],
       "additionalProperties": false,
       "properties": {
@@ -2132,27 +1786,6 @@
             },
             "additionalProperties": true
           }
-        },
-        "runtime": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "timeout": {
-              "type": "number",
-              "minimum": 1
-            },
-            "retries": {
-              "type": "integer",
-              "minimum": 0
-            },
-            "concurrency": {
-              "type": "integer",
-              "minimum": 1
-            },
-            "rate_limit": {
-              "type": "object"
-            }
-          }
         }
       }
     },
@@ -2177,8 +1810,7 @@
           "name": "top_comments",
           "when": "always"
         }
-      ],
-      "runtime": {}
+      ]
     },
     "required_secrets": [
       "REDDIT_CLIENT_ID",
@@ -2203,8 +1835,7 @@
         "source",
         "fetch",
         "filters",
-        "enrich",
-        "runtime"
+        "enrich"
       ],
       "additionalProperties": false,
       "properties": {
@@ -2270,27 +1901,6 @@
             },
             "additionalProperties": true
           }
-        },
-        "runtime": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "timeout": {
-              "type": "number",
-              "minimum": 1
-            },
-            "retries": {
-              "type": "integer",
-              "minimum": 0
-            },
-            "concurrency": {
-              "type": "integer",
-              "minimum": 1
-            },
-            "rate_limit": {
-              "type": "object"
-            }
-          }
         }
       }
     },
@@ -2311,8 +1921,7 @@
           "name": "full_text",
           "when": "always"
         }
-      ],
-      "runtime": {}
+      ]
     },
     "required_secrets": [],
     "supported_enrichers": [
@@ -2334,8 +1943,7 @@
         "source",
         "fetch",
         "filters",
-        "enrich",
-        "runtime"
+        "enrich"
       ],
       "additionalProperties": false,
       "properties": {
@@ -2396,27 +2004,6 @@
             },
             "additionalProperties": true
           }
-        },
-        "runtime": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "timeout": {
-              "type": "number",
-              "minimum": 1
-            },
-            "retries": {
-              "type": "integer",
-              "minimum": 0
-            },
-            "concurrency": {
-              "type": "integer",
-              "minimum": 1
-            },
-            "rate_limit": {
-              "type": "object"
-            }
-          }
         }
       }
     },
@@ -2431,8 +2018,7 @@
       "filters": {
         "timeline_min_faves": 50
       },
-      "enrich": [],
-      "runtime": {}
+      "enrich": []
     },
     "required_secrets": [
       "TWITTERAPI_IO_KEY"

@@ -39,8 +39,8 @@ create table if not exists public.octp_scrape_tasks (
     check (stage in (
       'validate_config',
       'discover',
+      'prune',
       'enrich',
-      'select',
       'normalize',
       'validate_output',
       'sink',
@@ -65,13 +65,17 @@ create table if not exists public.octp_scrape_tasks (
 alter table public.octp_scrape_tasks
 drop constraint if exists octp_scrape_tasks_stage_check;
 
+update public.octp_scrape_tasks
+set stage = 'prune'
+where stage = 'select';
+
 alter table public.octp_scrape_tasks
 add constraint octp_scrape_tasks_stage_check
 check (stage in (
   'validate_config',
   'discover',
+  'prune',
   'enrich',
-  'select',
   'normalize',
   'validate_output',
   'sink',

@@ -177,14 +177,8 @@ class RedditAdapter(SourceAdapterBase):
 
     def discover(self, ctx: RunContext, config: ScraperConfig) -> list[SourceRecord]:
         source = config.input.source
-        filters = config.input.filters
         fetch = config.input.fetch
         subreddit = str(source.get("subreddit") or "LocalLLaMA")
-        min_score = int(filters.get("min_score") if filters.get("min_score") is not None else 50)
-        skip_nsfw = bool(filters.get("skip_nsfw", True))
-        skip_stickied = bool(filters.get("skip_stickied", True))
-        skip_discussion_below = int(filters.get("skip_discussion_below") if filters.get("skip_discussion_below") is not None else 100)
-        skip_self_text_below = int(filters.get("skip_self_text_below") if filters.get("skip_self_text_below") is not None else 200)
         max_retries = int(fetch.get("max_retries") if fetch.get("max_retries") is not None else 3)
         post_limit = int(fetch.get("post_limit") if fetch.get("post_limit") is not None else 10)
 
@@ -201,7 +195,7 @@ class RedditAdapter(SourceAdapterBase):
         try:
             resp = _retry_get(top_url, params={"t": "day", "limit": post_limit}, headers=headers, max_retries=max_retries)
             if resp.status_code != 200:
-                return self._fetch_rss_fallback(subreddit, min_score, post_limit, {"User-Agent": USER_AGENT}, "rss_fallback")
+                return self._fetch_rss_fallback(subreddit, post_limit, {"User-Agent": USER_AGENT}, "rss_fallback")
             posts = resp.json().get("data", {}).get("children", [])
         except Exception:
             return []
@@ -209,20 +203,10 @@ class RedditAdapter(SourceAdapterBase):
         records: list[SourceRecord] = []
         for child in posts:
             post = child.get("data", {})
-            if skip_nsfw and post.get("over_18"):
-                continue
-            if skip_stickied and post.get("stickied"):
-                continue
             score = int(post.get("score") or 0)
-            if score < min_score:
-                continue
             flair = post.get("link_flair_text", "")
-            if flair == "Discussion" and score < skip_discussion_below:
-                continue
             is_self = bool(post.get("is_self", False))
             selftext = post.get("selftext", "")
-            if is_self and len(selftext) < skip_self_text_below:
-                continue
             title = str(post.get("title") or "").strip()
             permalink = post.get("permalink", "")
             url = f"https://reddit.com{permalink}" if permalink else ""
@@ -246,6 +230,8 @@ class RedditAdapter(SourceAdapterBase):
                         "flair": flair,
                         "post_id": post_id,
                         "is_self": is_self,
+                        "over_18": bool(post.get("over_18")),
+                        "stickied": bool(post.get("stickied")),
                         "external_url": post.get("url", "") if not is_self else "",
                         "source_tag": f"reddit_{subreddit.lower()}",
                         "discover_via": api_mode,
@@ -257,6 +243,32 @@ class RedditAdapter(SourceAdapterBase):
                 )
             )
         return records
+
+    def prune(self, ctx: RunContext, records: list[SourceRecord], config: ScraperConfig) -> list[SourceRecord]:
+        filters = config.input.filters
+        min_score = int(filters.get("min_score") if filters.get("min_score") is not None else 50)
+        skip_nsfw = bool(filters.get("skip_nsfw", True))
+        skip_stickied = bool(filters.get("skip_stickied", True))
+        skip_discussion_below = int(filters.get("skip_discussion_below") if filters.get("skip_discussion_below") is not None else 100)
+        skip_self_text_below = int(filters.get("skip_self_text_below") if filters.get("skip_self_text_below") is not None else 200)
+
+        pruned: list[SourceRecord] = []
+        for record in records:
+            score = int(record.metrics.get("score") or 0)
+            if score < min_score:
+                continue
+            if skip_nsfw and record.extra.get("over_18"):
+                continue
+            if skip_stickied and record.extra.get("stickied"):
+                continue
+            flair = str(record.extra.get("flair") or "")
+            if flair == "Discussion" and score < skip_discussion_below:
+                continue
+            post_text = str(record.context_content.get("post_text") or "")
+            if record.extra.get("is_self") and len(post_text) < skip_self_text_below:
+                continue
+            pruned.append(record)
+        return pruned
 
     def enrich(self, ctx: RunContext, records: list[SourceRecord], config: ScraperConfig) -> list[SourceRecord]:
         if not enrich_enabled(config, "top_comments"):
@@ -290,7 +302,6 @@ class RedditAdapter(SourceAdapterBase):
     def _fetch_rss_fallback(
         self,
         subreddit: str,
-        min_score: int,
         post_limit: int,
         headers: dict,
         discover_via: str,
@@ -316,8 +327,6 @@ class RedditAdapter(SourceAdapterBase):
             summary = _clean_text(getattr(entry, "summary", "") or "")
             score = _parse_rss_metric(r"([0-9,]+)\s+points?", summary)
             comments_count = _parse_rss_metric(r"([0-9,]+)\s+comments?", summary)
-            if score and score < min_score:
-                continue
             post_id = _post_id_from_url(url)
             parsed = getattr(entry, "published_parsed", None) or getattr(entry, "updated_parsed", None)
             published_at = datetime(*parsed[:6], tzinfo=timezone.utc) if parsed else None

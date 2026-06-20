@@ -15,7 +15,8 @@ from core.registry import get_adapter, list_types
 from core.validation import validate_input
 from scripts.octp_supabase import SupabaseRestClient
 
-INPUT_KEYS = {"source", "fetch", "filters", "enrich", "runtime"}
+INPUT_KEYS = ("source", "fetch", "filters", "enrich")
+LEGACY_INPUT_KEYS = {"source", "fetch", "filters", "enrich", "runtime"}
 
 
 @dataclass(frozen=True)
@@ -29,18 +30,19 @@ class MigrationResult:
 
 
 def is_v1_input(value: dict[str, Any]) -> bool:
-    return set(value.keys()) == INPUT_KEYS
+    return set(value.keys()) == set(INPUT_KEYS)
 
 
 def convert_flat_input(scraper: str, raw: dict[str, Any]) -> dict[str, Any]:
     if is_v1_input(raw):
         return raw
+    if set(raw.keys()) == LEGACY_INPUT_KEYS:
+        return {key: raw[key] for key in INPUT_KEYS}
 
     source: dict[str, Any] = {}
     fetch: dict[str, Any] = {}
     filters: dict[str, Any] = {}
     enrich: list[dict[str, Any]] = []
-    runtime: dict[str, Any] = {}
 
     def move(keys: list[str], target: dict[str, Any]) -> None:
         for key in keys:
@@ -113,16 +115,11 @@ def convert_flat_input(scraper: str, raw: dict[str, Any]) -> dict[str, Any]:
     else:
         raise ValueError(f"unsupported scraper: {scraper}")
 
-    for key in ("timeout", "retries", "concurrency", "rate_limit"):
-        if key in raw:
-            runtime[key] = raw[key]
-
     return {
         "source": source,
         "fetch": fetch,
         "filters": filters,
         "enrich": enrich,
-        "runtime": runtime,
     }
 
 
@@ -185,7 +182,7 @@ def run_migration(*, apply: bool, client: SupabaseRestClient | None = None) -> i
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Migrate Octopus scraper configs to v1 five-part input")
+    parser = argparse.ArgumentParser(description="Migrate Octopus scraper configs to v1 four-part input")
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--dry-run", action="store_true", help="Validate and print summary only")
     group.add_argument("--apply", action="store_true", help="Update Supabase configs")

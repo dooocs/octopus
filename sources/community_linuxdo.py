@@ -96,7 +96,7 @@ class LinuxDoAdapter(SourceAdapterBase):
             record.content = self._discussion_text(context)
         return records
 
-    def select(self, ctx: RunContext, records: list[SourceRecord], config: ScraperConfig) -> list[SourceRecord]:
+    def prune(self, ctx: RunContext, records: list[SourceRecord], config: ScraperConfig) -> list[SourceRecord]:
         limit = int(config.input.fetch.get("limit") or 10)
         ranked = sorted(
             records,

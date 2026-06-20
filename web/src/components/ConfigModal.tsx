@@ -30,14 +30,14 @@ function slugify(value: string) {
     .replace(/^_+|_+$/g, '')
 }
 
-function validateFivePartInput(value: Record<string, JsonValue>) {
+function validateFourPartInput(value: Record<string, JsonValue>) {
   const keys = Object.keys(value).sort()
-  const expected = ['enrich', 'fetch', 'filters', 'runtime', 'source']
+  const expected = ['enrich', 'fetch', 'filters', 'source']
   if (keys.length !== expected.length || keys.some((key, index) => key !== expected[index])) {
-    return 'Input 必须只包含 source、fetch、filters、enrich、runtime 五个一级 key'
+    return 'Input 必须只包含 source、fetch、filters、enrich 四个一级 key'
   }
 
-  for (const key of ['source', 'fetch', 'filters', 'runtime']) {
+  for (const key of ['source', 'fetch', 'filters']) {
     const section = value[key]
     if (!section || typeof section !== 'object' || Array.isArray(section)) {
       return `${key} 必须是 JSON object`
@@ -126,7 +126,7 @@ export default function ConfigModal({
       return
     }
 
-    const structureError = validateFivePartInput(parsed as Record<string, JsonValue>)
+    const structureError = validateFourPartInput(parsed as Record<string, JsonValue>)
     if (structureError) {
       setError(structureError)
       return

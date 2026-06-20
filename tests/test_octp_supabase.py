@@ -21,7 +21,6 @@ class OctpSupabaseConfigTest(unittest.TestCase):
                 "fetch": {"new_n": 500},
                 "filters": {"min_score": 50},
                 "enrich": [],
-                "runtime": {},
             },
         }
 
@@ -43,7 +42,7 @@ class OctpSupabaseConfigTest(unittest.TestCase):
                 "source_type": "WEBSITE",
                 "sub_source_type": "openai_blog",
                 "item_type": "article",
-                "input": '{"source":{"url":"https://example.com/feed.xml"},"fetch":{"max_items":5},"filters":{},"enrich":[],"runtime":{}}',
+                "input": '{"source":{"url":"https://example.com/feed.xml"},"fetch":{"max_items":5},"filters":{},"enrich":[]}',
             }
         )
 

@@ -69,9 +69,6 @@ class OpenReviewAdapter(SourceAdapterBase):
     def discover(self, ctx: RunContext, config: ScraperConfig) -> list[SourceRecord]:
         input_value = config.input
         per_source = int(input_value.fetch.get("per_source") or 50)
-        limit = int(input_value.fetch.get("limit") or 3)
-        sort_by = str(input_value.fetch.get("sort_by") or "reply_count")
-        min_reply_count = int(input_value.filters.get("min_reply_count") or 0)
 
         records: list[SourceRecord] = []
         seen: set[str] = set()
@@ -81,7 +78,6 @@ class OpenReviewAdapter(SourceAdapterBase):
                     params={"content.venueid": str(venue_id), "limit": per_source, "details": "replyCount"},
                     seen=seen,
                     source_label=str(venue_id),
-                    min_reply_count=min_reply_count,
                 )
             )
         for invitation in input_value.source.get("invitations", []):
@@ -90,24 +86,35 @@ class OpenReviewAdapter(SourceAdapterBase):
                     params={"invitation": str(invitation), "limit": per_source, "details": "replyCount"},
                     seen=seen,
                     source_label=str(invitation),
-                    min_reply_count=min_reply_count,
                 )
             )
 
+        return records
+
+    def prune(self, ctx: RunContext, records: list[SourceRecord], config: ScraperConfig) -> list[SourceRecord]:
+        input_value = config.input
+        limit = int(input_value.fetch.get("limit") or 3)
+        sort_by = str(input_value.fetch.get("sort_by") or "reply_count")
+        min_reply_count = int(input_value.filters.get("min_reply_count") or 0)
+        filtered = [
+            record
+            for record in records
+            if int(record.metrics.get("reply_count") or 0) >= min_reply_count
+        ]
         if sort_by == "published_at":
-            records.sort(
+            filtered.sort(
                 key=lambda item: item.source_published_date or datetime.min.replace(tzinfo=timezone.utc),
                 reverse=True,
             )
         else:
-            records.sort(
+            filtered.sort(
                 key=lambda item: (
                     int(item.metrics.get("reply_count") or 0),
                     item.source_published_date or datetime.min.replace(tzinfo=timezone.utc),
                 ),
                 reverse=True,
             )
-        return records[:limit]
+        return filtered[:limit]
 
     def _fetch_notes(
         self,
@@ -115,7 +122,6 @@ class OpenReviewAdapter(SourceAdapterBase):
         params: dict[str, Any],
         seen: set[str],
         source_label: str,
-        min_reply_count: int,
     ) -> list[SourceRecord]:
         response = http_get(
             OPENREVIEW_API_URL,
@@ -135,8 +141,6 @@ class OpenReviewAdapter(SourceAdapterBase):
             content = note.get("content") or {}
             details = note.get("details") or {}
             reply_count = int(details.get("replyCount") or details.get("reply_count") or 0)
-            if reply_count < min_reply_count:
-                continue
             title = str(_value(content, "title", "") or "").strip()
             if not title:
                 continue

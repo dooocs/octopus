@@ -182,11 +182,7 @@ class ProductHuntAdapter(SourceAdapterBase):
         api_token = self._api_token(config)
         if not api_token:
             return []
-        filters = config.input.filters
-        min_votes = int(filters.get("min_votes") or 200)
         max_retries = int(config.input.fetch.get("max_retries") or 3)
-        topic_whitelist = filters.get("topic_whitelist") or DEFAULT_TOPIC_WHITELIST
-        topic_blacklist = filters.get("topic_blacklist") or DEFAULT_TOPIC_BLACKLIST
         headers = {"Authorization": f"Bearer {api_token}", "Content-Type": "application/json"}
 
         edges = []
@@ -214,15 +210,9 @@ class ProductHuntAdapter(SourceAdapterBase):
         for edge in edges:
             node = edge.get("node", {})
             votes = int(node.get("votesCount") or 0)
-            if votes < min_votes:
-                continue
             topic_edges = node.get("topics", {}).get("edges", [])
             topic_slugs = [item["node"]["slug"] for item in topic_edges if item.get("node", {}).get("slug")]
             topic_names = [item["node"]["name"] for item in topic_edges if item.get("node", {}).get("name")]
-            if topic_slugs and all(slug in topic_blacklist for slug in topic_slugs):
-                continue
-            if topic_whitelist and not any(slug in topic_whitelist for slug in topic_slugs):
-                continue
             name = str(node.get("name") or "").strip()
             ph_url = str(node.get("url") or "")
             if not name or not ph_url:
@@ -263,6 +253,25 @@ class ProductHuntAdapter(SourceAdapterBase):
                 )
             )
         return records
+
+    def prune(self, ctx: RunContext, records: list[SourceRecord], config: ScraperConfig) -> list[SourceRecord]:
+        filters = config.input.filters
+        min_votes = int(filters.get("min_votes") or 200)
+        topic_whitelist = filters.get("topic_whitelist") or DEFAULT_TOPIC_WHITELIST
+        topic_blacklist = filters.get("topic_blacklist") or DEFAULT_TOPIC_BLACKLIST
+
+        pruned: list[SourceRecord] = []
+        for record in records:
+            votes = int(record.metrics.get("votes") or 0)
+            if votes < min_votes:
+                continue
+            topic_slugs = [str(item) for item in record.extra.get("topic_slugs") or []]
+            if topic_slugs and all(slug in topic_blacklist for slug in topic_slugs):
+                continue
+            if topic_whitelist and not any(slug in topic_whitelist for slug in topic_slugs):
+                continue
+            pruned.append(record)
+        return pruned
 
     def enrich(self, ctx: RunContext, records: list[SourceRecord], config: ScraperConfig) -> list[SourceRecord]:
         if not enrich_enabled(config, "product_comments"):

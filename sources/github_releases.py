@@ -87,10 +87,6 @@ class GitHubReleasesAdapter(SourceAdapterBase):
         repositories = [str(repo).strip() for repo in input_value.source.get("repositories", []) if str(repo).strip()]
         releases_per_repo = int(input_value.fetch.get("releases_per_repo") or 5)
         window_days = int(input_value.fetch.get("window_days") or 0)
-        limit = int(input_value.fetch.get("limit") or 3)
-        sort_by = str(input_value.fetch.get("sort_by") or "asset_downloads")
-        skip_prerelease = bool(input_value.filters.get("skip_prerelease", True))
-        min_asset_downloads = int(input_value.filters.get("min_asset_downloads") or 0)
         cutoff = datetime.now(timezone.utc) - timedelta(days=window_days) if window_days > 0 else None
 
         records: list[SourceRecord] = []
@@ -111,11 +107,7 @@ class GitHubReleasesAdapter(SourceAdapterBase):
                 published_at = _parse_datetime(release.get("published_at"))
                 if cutoff and published_at and published_at < cutoff:
                     continue
-                if skip_prerelease and release.get("prerelease"):
-                    continue
                 downloads = _asset_downloads(release)
-                if downloads < min_asset_downloads:
-                    continue
                 release_id = str(release.get("id") or f"{repo}:{release.get('tag_name')}")
                 assets = release.get("assets") or []
                 records.append(
@@ -151,20 +143,36 @@ class GitHubReleasesAdapter(SourceAdapterBase):
                     )
                 )
 
+        return records
+
+    def prune(self, ctx: RunContext, records: list[SourceRecord], config: ScraperConfig) -> list[SourceRecord]:
+        input_value = config.input
+        limit = int(input_value.fetch.get("limit") or 3)
+        sort_by = str(input_value.fetch.get("sort_by") or "asset_downloads")
+        skip_prerelease = bool(input_value.filters.get("skip_prerelease", True))
+        min_asset_downloads = int(input_value.filters.get("min_asset_downloads") or 0)
+        filtered = []
+        for record in records:
+            if skip_prerelease and record.metrics.get("prerelease"):
+                continue
+            if int(record.metrics.get("asset_downloads") or 0) < min_asset_downloads:
+                continue
+            filtered.append(record)
+
         if sort_by == "published_at":
-            records.sort(
+            filtered.sort(
                 key=lambda item: item.source_published_date or datetime.min.replace(tzinfo=timezone.utc),
                 reverse=True,
             )
         else:
-            records.sort(
+            filtered.sort(
                 key=lambda item: (
                     int(item.metrics.get("asset_downloads") or 0),
                     item.source_published_date or datetime.min.replace(tzinfo=timezone.utc),
                 ),
                 reverse=True,
             )
-        return records[:limit]
+        return filtered[:limit]
 
     def enrich(
         self,
