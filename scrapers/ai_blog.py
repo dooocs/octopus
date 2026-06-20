@@ -3,6 +3,7 @@
 
 import re
 import requests
+import threading
 from bs4 import BeautifulSoup
 from datetime import datetime, timezone, timedelta
 from infra.http import http_get
@@ -13,6 +14,13 @@ _CJK_DATE_RE = re.compile(r"(\d{4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日")
 _ISO_DATE_RE = re.compile(r"(\d{4})-(\d{2})-(\d{2})")
 _EN_SHORT_RE = re.compile(r"(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s*(\d{1,2}),?\s+(\d{4})")
 _EN_FULL_RE = re.compile(r"(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2}),?\s+(\d{4})")
+
+try:
+    import trafilatura
+    _trafilatura_lock = threading.Lock()
+    HAS_TRAFILATURA = True
+except ImportError:
+    HAS_TRAFILATURA = False
 
 
 def _extract_date_from_text(text: str) -> datetime | None:
@@ -33,15 +41,41 @@ def _extract_date_from_text(text: str) -> datetime | None:
     return None
 
 
+def _fetch_full_text(url: str, timeout: int, max_chars: int) -> str:
+    if not HAS_TRAFILATURA:
+        return ""
+    try:
+        res = http_get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=timeout)
+        if res.status_code != 200:
+            return ""
+        with _trafilatura_lock:
+            content = trafilatura.extract(res.text, include_comments=False, include_tables=True, no_fallback=False)
+        return (content or "").strip()[:max_chars]
+    except Exception:
+        return ""
+
+
+def _enrich_enabled(config: dict, name: str, default: bool = True) -> bool:
+    enrich = config.get("enrich")
+    if not isinstance(enrich, list):
+        return default
+    return any(isinstance(item, dict) and item.get("name") == name for item in enrich)
+
+
 @register("ai_blog")
 class AIBlogEngine(BaseScraper):
     def fetch(self) -> list[RawItem]:
+        return self.enrich_items(self.discover_items())
+
+    def discover_items(self) -> list[RawItem]:
         base_url = self.config.get("base_url", "")
         news_url = self.config.get("news_url", "")
         link_selector = self.config.get("link_selector", "a[href*='/news/']")
         author = self.config.get("author", "")
         source_tag = self.config.get("source_tag", "official_ai")
         fetch_window = self.config.get("fetch_window_hours", 0)
+        metadata = self.config.get("metadata") if isinstance(self.config.get("metadata"), dict) else {}
+        max_content_chars = int(self.config.get("max_content_chars", 12000))
 
         cutoff = None
         if fetch_window:
@@ -96,6 +130,10 @@ class AIBlogEngine(BaseScraper):
                     continue
 
                 desc_tag = card.select_one("p")
+                list_summary = desc_tag.get_text(strip=True) if desc_tag else ""
+                extra = {"source_tag": source_tag}
+                extra.update(metadata)
+
                 items.append(RawItem(
                     title=title,
                     original_url=full_url,
@@ -104,9 +142,13 @@ class AIBlogEngine(BaseScraper):
                     content_type=self.config.get("content_type", "article"),
                     author=author,
                     author_url=base_url,
-                    body_text=desc_tag.get_text(strip=True) if desc_tag else "",
+                    body_text=list_summary[:max_content_chars],
                     raw_metrics={},
-                    extra={"source_tag": source_tag},
+                    extra=extra,
+                    context_content={
+                        "list_summary": list_summary,
+                        "full_text_fetched": False,
+                    },
                     published_at=published_at,
                 ))
 
@@ -115,3 +157,17 @@ class AIBlogEngine(BaseScraper):
         except Exception as e:
             print(f"⚠️ {self.name} 抓取失败: {e}")
             return []
+
+    def enrich_items(self, items: list[RawItem]) -> list[RawItem]:
+        if not _enrich_enabled(self.config, "full_text", default=bool(self.config.get("fetch_full_text", True))):
+            return items
+        if not self.config.get("fetch_full_text", True):
+            return items
+        full_text_timeout = int(self.config.get("full_text_timeout", 15))
+        max_content_chars = int(self.config.get("max_content_chars", 12000))
+        for item in items:
+            full_text = _fetch_full_text(item.original_url, full_text_timeout, max_content_chars)
+            if full_text:
+                item.body_text = full_text[:max_content_chars]
+            item.context_content["full_text_fetched"] = bool(full_text)
+        return items

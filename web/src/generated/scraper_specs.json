@@ -35,6 +35,10 @@
             },
             "source_tag": {
               "type": "string"
+            },
+            "metadata": {
+              "type": "object",
+              "additionalProperties": true
             }
           }
         },
@@ -43,6 +47,15 @@
           "additionalProperties": false,
           "properties": {
             "fetch_window_hours": {
+              "type": "integer"
+            },
+            "fetch_full_text": {
+              "type": "boolean"
+            },
+            "full_text_timeout": {
+              "type": "integer"
+            },
+            "max_content_chars": {
               "type": "integer"
             }
           }
@@ -62,7 +75,9 @@
             "properties": {
               "name": {
                 "type": "string",
-                "enum": []
+                "enum": [
+                  "full_text"
+                ]
               },
               "when": {
                 "type": "string"
@@ -101,14 +116,24 @@
         "link_selector": "a[href*='/news/']"
       },
       "fetch": {
-        "fetch_window_hours": 0
+        "fetch_window_hours": 0,
+        "fetch_full_text": true,
+        "full_text_timeout": 15,
+        "max_content_chars": 12000
       },
       "filters": {},
-      "enrich": [],
+      "enrich": [
+        {
+          "name": "full_text",
+          "when": "always"
+        }
+      ],
       "runtime": {}
     },
     "required_secrets": [],
-    "supported_enrichers": [],
+    "supported_enrichers": [
+      "full_text"
+    ],
     "rate_limit": {},
     "description": "抓取 AI 公司新闻页或博客页面。"
   },
@@ -307,114 +332,7 @@
             "top_n": {
               "type": "integer"
             },
-            "max_replies_to_fetch": {
-              "type": "integer"
-            }
-          }
-        },
-        "filters": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {}
-        },
-        "enrich": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "required": [
-              "name"
-            ],
-            "properties": {
-              "name": {
-                "type": "string",
-                "enum": [
-                  "top_replies"
-                ]
-              },
-              "when": {
-                "type": "string"
-              }
-            },
-            "additionalProperties": true
-          }
-        },
-        "runtime": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "timeout": {
-              "type": "number",
-              "minimum": 1
-            },
-            "retries": {
-              "type": "integer",
-              "minimum": 0
-            },
-            "concurrency": {
-              "type": "integer",
-              "minimum": 1
-            },
-            "rate_limit": {
-              "type": "object"
-            }
-          }
-        }
-      }
-    },
-    "default_input": {
-      "source": {},
-      "fetch": {
-        "top_n": 10,
-        "max_replies_to_fetch": 30
-      },
-      "filters": {},
-      "enrich": [
-        {
-          "name": "top_replies",
-          "when": "always"
-        }
-      ],
-      "runtime": {}
-    },
-    "required_secrets": [],
-    "supported_enrichers": [
-      "top_replies"
-    ],
-    "rate_limit": {},
-    "description": "抓取 LinuxDo 热门讨论。"
-  },
-  {
-    "scraper": "community_v2ex",
-    "label": "V2EX",
-    "group": "Community",
-    "default_source_type": "community",
-    "default_item_type": "discussion",
-    "input_schema_version": 1,
-    "input_schema": {
-      "type": "object",
-      "required": [
-        "source",
-        "fetch",
-        "filters",
-        "enrich",
-        "runtime"
-      ],
-      "additionalProperties": false,
-      "properties": {
-        "source": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "source_tag": {
-              "type": "string"
-            }
-          }
-        },
-        "fetch": {
-          "type": "object",
-          "additionalProperties": false,
-          "properties": {
-            "top_n": {
+            "limit": {
               "type": "integer"
             },
             "max_replies_to_fetch": {
@@ -478,8 +396,127 @@
       "source": {},
       "fetch": {
         "top_n": 10,
+        "limit": 10,
         "max_replies_to_fetch": 30,
-        "max_replies_to_keep": 15
+        "max_replies_to_keep": 10
+      },
+      "filters": {},
+      "enrich": [
+        {
+          "name": "top_replies",
+          "when": "always"
+        }
+      ],
+      "runtime": {}
+    },
+    "required_secrets": [],
+    "supported_enrichers": [
+      "top_replies"
+    ],
+    "rate_limit": {},
+    "description": "抓取 LinuxDo 热门讨论。"
+  },
+  {
+    "scraper": "community_v2ex",
+    "label": "V2EX",
+    "group": "Community",
+    "default_source_type": "community",
+    "default_item_type": "discussion",
+    "input_schema_version": 1,
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "source",
+        "fetch",
+        "filters",
+        "enrich",
+        "runtime"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "source_tag": {
+              "type": "string"
+            }
+          }
+        },
+        "fetch": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "top_n": {
+              "type": "integer"
+            },
+            "top_clicked_limit": {
+              "type": "integer"
+            },
+            "max_replies_to_fetch": {
+              "type": "integer"
+            },
+            "max_replies_to_keep": {
+              "type": "integer"
+            }
+          }
+        },
+        "filters": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {}
+        },
+        "enrich": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "enum": [
+                  "top_replies"
+                ]
+              },
+              "when": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true
+          }
+        },
+        "runtime": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "timeout": {
+              "type": "number",
+              "minimum": 1
+            },
+            "retries": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "concurrency": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "rate_limit": {
+              "type": "object"
+            }
+          }
+        }
+      }
+    },
+    "default_input": {
+      "source": {},
+      "fetch": {
+        "top_n": 10,
+        "top_clicked_limit": 10,
+        "max_replies_to_fetch": 30,
+        "max_replies_to_keep": 10
       },
       "filters": {},
       "enrich": [
@@ -571,7 +608,9 @@
             "properties": {
               "name": {
                 "type": "string",
-                "enum": []
+                "enum": [
+                  "release_details"
+                ]
               },
               "when": {
                 "type": "string"
@@ -626,11 +665,18 @@
         "skip_prerelease": true,
         "min_asset_downloads": 0
       },
-      "enrich": [],
+      "enrich": [
+        {
+          "name": "release_details",
+          "when": "always"
+        }
+      ],
       "runtime": {}
     },
     "required_secrets": [],
-    "supported_enrichers": [],
+    "supported_enrichers": [
+      "release_details"
+    ],
     "rate_limit": {},
     "description": "抓取 watched GitHub repositories 的近期 release，默认每天取 top3。"
   },
@@ -969,6 +1015,12 @@
               "items": {
                 "type": "string"
               }
+            },
+            "max_comments_to_fetch": {
+              "type": "integer"
+            },
+            "max_comments_to_keep": {
+              "type": "integer"
             }
           }
         },
@@ -992,7 +1044,8 @@
               "name": {
                 "type": "string",
                 "enum": [
-                  "article_body"
+                  "article_body",
+                  "top_comments"
                 ]
               },
               "when": {
@@ -1038,7 +1091,9 @@
           "x.com",
           "medium.com",
           "zhihu.com"
-        ]
+        ],
+        "max_comments_to_fetch": 30,
+        "max_comments_to_keep": 10
       },
       "filters": {
         "min_score": 50
@@ -1047,13 +1102,18 @@
         {
           "name": "article_body",
           "when": "has_external_url"
+        },
+        {
+          "name": "top_comments",
+          "when": "always"
         }
       ],
       "runtime": {}
     },
     "required_secrets": [],
     "supported_enrichers": [
-      "article_body"
+      "article_body",
+      "top_comments"
     ],
     "rate_limit": {},
     "description": "抓取 Hacker News 高分新帖。"
@@ -1316,6 +1376,9 @@
             },
             "limit": {
               "type": "integer"
+            },
+            "comments_to_keep": {
+              "type": "integer"
             }
           }
         },
@@ -1353,7 +1416,9 @@
             "properties": {
               "name": {
                 "type": "string",
-                "enum": []
+                "enum": [
+                  "top_comments"
+                ]
               },
               "when": {
                 "type": "string"
@@ -1392,7 +1457,8 @@
       },
       "fetch": {
         "window_days": 2,
-        "limit": 3
+        "limit": 3,
+        "comments_to_keep": 10
       },
       "filters": {
         "min_score": 0,
@@ -1400,11 +1466,18 @@
         "tag_whitelist": [],
         "tag_blacklist": []
       },
-      "enrich": [],
+      "enrich": [
+        {
+          "name": "top_comments",
+          "when": "always"
+        }
+      ],
       "runtime": {}
     },
     "required_secrets": [],
-    "supported_enrichers": [],
+    "supported_enrichers": [
+      "top_comments"
+    ],
     "rate_limit": {},
     "description": "抓取 Lobsters 热榜或指定 tag JSON，默认按 score/comment_count 取 top3。"
   },
@@ -1494,7 +1567,9 @@
             "properties": {
               "name": {
                 "type": "string",
-                "enum": []
+                "enum": [
+                  "release_metadata"
+                ]
               },
               "when": {
                 "type": "string"
@@ -1551,11 +1626,18 @@
         "min_weekly_downloads": 1000,
         "skip_prerelease": true
       },
-      "enrich": [],
+      "enrich": [
+        {
+          "name": "release_metadata",
+          "when": "always"
+        }
+      ],
       "runtime": {}
     },
     "required_secrets": [],
-    "supported_enrichers": [],
+    "supported_enrichers": [
+      "release_metadata"
+    ],
     "rate_limit": {},
     "description": "抓取 npm 近期更新包，保留 weekly/monthly downloads 等原生指标。"
   },
@@ -1605,6 +1687,9 @@
             "limit": {
               "type": "integer"
             },
+            "reply_limit": {
+              "type": "integer"
+            },
             "sort_by": {
               "type": "string",
               "enum": [
@@ -1633,7 +1718,9 @@
             "properties": {
               "name": {
                 "type": "string",
-                "enum": []
+                "enum": [
+                  "openreview_replies"
+                ]
               },
               "when": {
                 "type": "string"
@@ -1675,16 +1762,24 @@
       "fetch": {
         "per_source": 50,
         "limit": 3,
+        "reply_limit": 10,
         "sort_by": "reply_count"
       },
       "filters": {
         "min_reply_count": 0
       },
-      "enrich": [],
+      "enrich": [
+        {
+          "name": "openreview_replies",
+          "when": "always"
+        }
+      ],
       "runtime": {}
     },
     "required_secrets": [],
-    "supported_enrichers": [],
+    "supported_enrichers": [
+      "openreview_replies"
+    ],
     "rate_limit": {},
     "description": "抓取 OpenReview 公开 venue/submission notes，默认按 replyCount 取 top3。"
   },
@@ -1755,7 +1850,9 @@
             "properties": {
               "name": {
                 "type": "string",
-                "enum": []
+                "enum": [
+                  "product_comments"
+                ]
               },
               "when": {
                 "type": "string"
@@ -1797,13 +1894,20 @@
         "topic_whitelist": [],
         "topic_blacklist": []
       },
-      "enrich": [],
+      "enrich": [
+        {
+          "name": "product_comments",
+          "when": "always"
+        }
+      ],
       "runtime": {}
     },
     "required_secrets": [
       "PRODUCTHUNT_TOKEN"
     ],
-    "supported_enrichers": [],
+    "supported_enrichers": [
+      "product_comments"
+    ],
     "rate_limit": {},
     "description": "抓取 Product Hunt 高票新产品。"
   },
@@ -1846,6 +1950,9 @@
             },
             "limit": {
               "type": "integer"
+            },
+            "fetch_downloads": {
+              "type": "boolean"
             }
           }
         },
@@ -1871,7 +1978,9 @@
             "properties": {
               "name": {
                 "type": "string",
-                "enum": []
+                "enum": [
+                  "release_metadata"
+                ]
               },
               "when": {
                 "type": "string"
@@ -1917,19 +2026,27 @@
       },
       "fetch": {
         "window_days": 14,
-        "limit": 3
+        "limit": 3,
+        "fetch_downloads": true
       },
       "filters": {
         "skip_prerelease": true,
         "skip_yanked": true
       },
-      "enrich": [],
+      "enrich": [
+        {
+          "name": "release_metadata",
+          "when": "always"
+        }
+      ],
       "runtime": {}
     },
     "required_secrets": [],
-    "supported_enrichers": [],
+    "supported_enrichers": [
+      "release_metadata"
+    ],
     "rate_limit": {},
-    "description": "抓取 PyPI watched packages 的近期 release；PyPI 官方 JSON 不提供可靠下载量。"
+    "description": "抓取 PyPI watched packages 的近期 release，并尽量补充 PyPIStats 下载量。"
   },
   {
     "scraper": "reddit",
@@ -1963,6 +2080,12 @@
           "additionalProperties": false,
           "properties": {
             "max_retries": {
+              "type": "integer"
+            },
+            "post_limit": {
+              "type": "integer"
+            },
+            "max_comments_to_keep": {
               "type": "integer"
             }
           }
@@ -1998,7 +2121,9 @@
             "properties": {
               "name": {
                 "type": "string",
-                "enum": []
+                "enum": [
+                  "top_comments"
+                ]
               },
               "when": {
                 "type": "string"
@@ -2034,7 +2159,11 @@
       "source": {
         "subreddit": "LocalLLaMA"
       },
-      "fetch": {},
+      "fetch": {
+        "max_retries": 3,
+        "post_limit": 10,
+        "max_comments_to_keep": 10
+      },
       "filters": {
         "min_score": 50,
         "skip_nsfw": true,
@@ -2042,11 +2171,21 @@
         "skip_discussion_below": 100,
         "skip_self_text_below": 200
       },
-      "enrich": [],
+      "enrich": [
+        {
+          "name": "top_comments",
+          "when": "always"
+        }
+      ],
       "runtime": {}
     },
-    "required_secrets": [],
-    "supported_enrichers": [],
+    "required_secrets": [
+      "REDDIT_CLIENT_ID",
+      "REDDIT_CLIENT_SECRET"
+    ],
+    "supported_enrichers": [
+      "top_comments"
+    ],
     "rate_limit": {},
     "description": "抓取指定 subreddit 的高分讨论。"
   },
@@ -2074,6 +2213,13 @@
           "properties": {
             "url": {
               "type": "string"
+            },
+            "source_tag": {
+              "type": "string"
+            },
+            "metadata": {
+              "type": "object",
+              "additionalProperties": true
             }
           }
         },
@@ -2085,6 +2231,15 @@
               "type": "integer"
             },
             "fetch_window_hours": {
+              "type": "integer"
+            },
+            "fetch_full_text": {
+              "type": "boolean"
+            },
+            "full_text_timeout": {
+              "type": "integer"
+            },
+            "max_content_chars": {
               "type": "integer"
             }
           }
@@ -2104,7 +2259,9 @@
             "properties": {
               "name": {
                 "type": "string",
-                "enum": []
+                "enum": [
+                  "full_text"
+                ]
               },
               "when": {
                 "type": "string"
@@ -2142,14 +2299,24 @@
       },
       "fetch": {
         "max_items": 10,
-        "fetch_window_hours": 25
+        "fetch_window_hours": 25,
+        "fetch_full_text": true,
+        "full_text_timeout": 15,
+        "max_content_chars": 12000
       },
       "filters": {},
-      "enrich": [],
+      "enrich": [
+        {
+          "name": "full_text",
+          "when": "always"
+        }
+      ],
       "runtime": {}
     },
     "required_secrets": [],
-    "supported_enrichers": [],
+    "supported_enrichers": [
+      "full_text"
+    ],
     "rate_limit": {},
     "description": "抓取标准 RSS/Atom 订阅源。"
   },

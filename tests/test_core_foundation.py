@@ -5,12 +5,23 @@ import tempfile
 import unittest
 from pathlib import Path
 from typing import Any
+from unittest.mock import patch
 
 from core.contracts import ChannelSpec, InputConfig, RawItem, RunContext, ScraperConfig, SourceRecord
 from core.registry import export_specs, register_adapter
 from core.runner import run_config
 from pipeline.sinks import JsonlSink
 from scripts.migrate_scraper_configs_v1 import convert_flat_input, migrate_row
+
+
+class _FakeTextResponse:
+    def __init__(self, text: str, status_code: int = 200) -> None:
+        self.text = text
+        self.status_code = status_code
+
+    def raise_for_status(self) -> None:
+        if self.status_code >= 400:
+            raise RuntimeError(f"HTTP {self.status_code}")
 
 
 class InputConfigContractTest(unittest.TestCase):
@@ -55,6 +66,55 @@ class SpecExportTest(unittest.TestCase):
         self.assertIn("github_search", scrapers)
         self.assertIn("hackernews", scrapers)
         self.assertNotIn("twitter_nitter", scrapers)
+
+
+class ResearchMetadataTest(unittest.TestCase):
+    def test_rss_config_metadata_is_preserved_in_extra(self) -> None:
+        rss_text = """<?xml version="1.0" encoding="UTF-8" ?>
+<rss version="2.0">
+  <channel>
+    <title>Company Feed</title>
+    <item>
+      <title>Demo filing</title>
+      <link>https://example.com/filing</link>
+      <description>Demo body</description>
+      <pubDate>Fri, 19 Jun 2026 10:00:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>
+"""
+        config = {
+            "type": "rss",
+            "name": "Demo SEC Filings",
+            "enabled": True,
+            "source_type": "regulatory",
+            "sub_source_type": "sec_edgar_demo_filings",
+            "item_type": "filing",
+            "config": {
+                "source": {
+                    "url": "https://example.com/feed.xml",
+                    "source_tag": "sec_edgar",
+                    "metadata": {
+                        "company_ticker": "DEMO",
+                        "coverage_group": "ai_compute",
+                        "theme_tags": ["ai", "semiconductor"],
+                    },
+                },
+                "fetch": {"max_items": 1, "fetch_window_hours": 876000},
+                "filters": {},
+                "enrich": [],
+                "runtime": {},
+            },
+        }
+
+        with patch("scrapers.rss_feed.http_get", return_value=_FakeTextResponse(rss_text)):
+            result = run_config(config, "2026-06-20")
+
+        self.assertEqual(len(result.rows), 1)
+        self.assertEqual(result.rows[0]["item_type"], "filing")
+        self.assertEqual(result.rows[0]["extra"]["source_tag"], "sec_edgar")
+        self.assertEqual(result.rows[0]["extra"]["company_ticker"], "DEMO")
+        self.assertEqual(result.rows[0]["extra"]["theme_tags"], ["ai", "semiconductor"])
 
 
 class MigrationContractTest(unittest.TestCase):

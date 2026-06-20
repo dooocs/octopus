@@ -50,15 +50,19 @@ class OpenReviewAdapter:
             fetch={
                 "per_source": INTEGER,
                 "limit": INTEGER,
+                "reply_limit": INTEGER,
                 "sort_by": {"type": "string", "enum": ["reply_count", "published_at"]},
             },
             filters={"min_reply_count": INTEGER},
+            enrich_names=["openreview_replies"],
         ),
         default_input=default_input(
             source={"venue_ids": ["ICLR.cc/2026/Conference"], "invitations": []},
-            fetch={"per_source": 50, "limit": 3, "sort_by": "reply_count"},
+            fetch={"per_source": 50, "limit": 3, "reply_limit": 10, "sort_by": "reply_count"},
             filters={"min_reply_count": 0},
+            enrich=[{"name": "openreview_replies", "when": "always"}],
         ),
+        supported_enrichers=["openreview_replies"],
         description="抓取 OpenReview 公开 venue/submission notes，默认按 replyCount 取 top3。",
     )
 
@@ -116,7 +120,7 @@ class OpenReviewAdapter:
         response = http_get(
             OPENREVIEW_API_URL,
             params=params,
-            timeout=25,
+            timeout=12,
             headers={"User-Agent": "octopus-crawler/0.1"},
         )
         if response.status_code == 400:
@@ -143,10 +147,11 @@ class OpenReviewAdapter:
             tldr = str(_value(content, "TLDR", "") or _value(content, "tldr", "") or "")
             venue_id = str(_value(content, "venueid", "") or "")
             published_at = _ms_datetime(note.get("pdate")) or _ms_datetime(note.get("tcdate")) or _ms_datetime(note.get("cdate"))
+            forum = str(note.get("forum") or note_id)
             records.append(
                 SourceRecord(
                     identity=note_id,
-                    url=f"https://openreview.net/forum?id={note.get('forum') or note_id}",
+                    url=f"https://openreview.net/forum?id={forum}",
                     title=title,
                     content="\n\n".join(part for part in [tldr, abstract] if part),
                     metrics={
@@ -157,7 +162,7 @@ class OpenReviewAdapter:
                     extra={
                         "venue_id": venue_id,
                         "source_label": source_label,
-                        "forum": note.get("forum"),
+                        "forum": forum,
                         "keywords": _as_list(_value(content, "keywords", [])),
                         "authors": authors,
                         "author_ids": author_ids,
@@ -165,11 +170,63 @@ class OpenReviewAdapter:
                         "tmdate": note.get("tmdate"),
                         "pdate": note.get("pdate"),
                     },
+                    context_content={
+                        "top_replies": [],
+                    },
                     author_id=", ".join(authors[:3]),
                     source_published_date=published_at,
                 )
             )
         return records
+
+    def _fetch_replies(self, forum: str, original_note_id: str, limit: int) -> list[dict]:
+        if not forum or limit <= 0:
+            return []
+        try:
+            response = http_get(
+                OPENREVIEW_API_URL,
+                params={"forum": forum, "limit": max(limit * 3, limit)},
+                timeout=12,
+                headers={"User-Agent": "octopus-crawler/0.1"},
+            )
+            if response.status_code != 200:
+                return []
+            notes = response.json().get("notes") or []
+        except Exception:
+            return []
+
+        replies: list[dict] = []
+        for note in notes:
+            note_id = str(note.get("id") or "")
+            if not note_id or note_id == original_note_id:
+                continue
+            content = note.get("content") or {}
+            flat_content = {key: _value(content, key) for key in content.keys()}
+            text = (
+                flat_content.get("comment")
+                or flat_content.get("review")
+                or flat_content.get("summary")
+                or flat_content.get("decision")
+                or flat_content.get("title")
+                or ""
+            )
+            if not text:
+                continue
+            replies.append(
+                {
+                    "id": note_id,
+                    "replyto": note.get("replyto"),
+                    "invitation": (note.get("invitations") or [""])[0],
+                    "signatures": note.get("signatures") or [],
+                    "text": str(text)[:1500],
+                    "rating": flat_content.get("rating"),
+                    "confidence": flat_content.get("confidence"),
+                    "recommendation": flat_content.get("recommendation"),
+                    "created_at": _ms_datetime(note.get("tcdate")).isoformat() if _ms_datetime(note.get("tcdate")) else None,
+                }
+            )
+        replies.sort(key=lambda item: item.get("created_at") or "", reverse=True)
+        return replies[:limit]
 
     def enrich(
         self,
@@ -177,6 +234,13 @@ class OpenReviewAdapter:
         records: list[SourceRecord],
         config: ScraperConfig,
     ) -> list[SourceRecord]:
+        reply_limit = int(config.input.fetch.get("reply_limit") or 10)
+        if reply_limit <= 0:
+            return records
+        for record in records:
+            forum = str(record.extra.get("forum") or record.identity)
+            record.context_content["top_replies"] = self._fetch_replies(forum, record.identity, reply_limit)
+            record.context_content["top_replies_basis"] = "openreview_public_forum_replies"
         return records
 
     def normalize(self, ctx: RunContext, record: SourceRecord, config: ScraperConfig) -> RawItem:
@@ -191,5 +255,6 @@ class OpenReviewAdapter:
             body_text=record.content,
             raw_metrics=record.metrics,
             extra=record.extra,
+            context_content=record.context_content,
             published_at=record.source_published_date,
         )

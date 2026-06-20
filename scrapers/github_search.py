@@ -96,9 +96,19 @@ def _oss_date_str(snapshot_date: str | None = None) -> str | None:
     return snapshot_date.replace("-", "") if snapshot_date else None
 
 
+def _enrich_enabled(config: dict, name: str, default: bool = True) -> bool:
+    enrich = config.get("enrich")
+    if not isinstance(enrich, list):
+        return default
+    return any(isinstance(item, dict) and item.get("name") == name for item in enrich)
+
+
 @register("github_search")
 class GitHubSearchEngine(BaseScraper):
     def fetch(self) -> list[RawItem]:
+        return self.enrich_items(self.discover_items())
+
+    def discover_items(self) -> list[RawItem]:
         token = os.getenv("GH_MODELS_TOKEN")
         if not token:
             print("⚠️ GH_MODELS_TOKEN 未设置")
@@ -108,9 +118,6 @@ class GitHubSearchEngine(BaseScraper):
         fetch_days = self.config.get("fetch_window_days", 7)
         last_week = (datetime.now() - timedelta(days=fetch_days)).strftime("%Y-%m-%d")
         per_page = self.config.get("per_page", 30)
-        badge_patterns = self.config.get("badge_patterns", _DEFAULT_BADGE_PATTERNS)
-        max_images = self.config.get("max_readme_images", 3)
-        oss_date = _oss_date_str(self.snapshot_date)
 
         queries = self.config.get("queries", [
             {"q": f"created:>={last_week} stars:>100 topic:ai", "label": "AI topic"},
@@ -149,15 +156,6 @@ class GitHubSearchEngine(BaseScraper):
                     owner = r["owner"]["login"]
                     repo = r["name"]
 
-                    readme_raw = _fetch_readme_raw(owner, repo, token)
-                    readme_images = _extract_readme_images(readme_raw, owner, repo, max_images, badge_patterns)
-                    readme_images = upload_images_to_oss(readme_images, oss_date)
-                    readme_clean = _clean_readme(readme_raw) if readme_raw else ""
-                    star_history = _star_history_url(owner, repo)
-                    star_history = upload_image_to_oss(star_history, oss_date) or star_history
-                    lang_prefix = _fetch_languages(owner, repo, token)
-                    body_text = lang_prefix + readme_clean if readme_clean else (r.get("description") or "")
-
                     items.append(RawItem(
                         title=r["full_name"],
                         original_url=url,
@@ -166,7 +164,7 @@ class GitHubSearchEngine(BaseScraper):
                         content_type=self.config.get("content_type", "repo"),
                         author=owner,
                         author_url=f"https://github.com/{owner}",
-                        body_text=body_text,
+                        body_text=r.get("description") or "",
                         raw_metrics={
                             "stars": r["stargazers_count"],
                             "forks": r["forks_count"],
@@ -179,8 +177,10 @@ class GitHubSearchEngine(BaseScraper):
                             "created_at": r.get("created_at"),
                             "search_query": label,
                             "description": r.get("description") or "",
-                            "readme_images": readme_images,
-                            "star_history_url": star_history,
+                            "owner": owner,
+                            "repo": repo,
+                            "readme_images": [],
+                            "star_history_url": "",
                         },
                         published_at=datetime.fromisoformat(
                             r["created_at"].replace("Z", "+00:00")
@@ -193,4 +193,31 @@ class GitHubSearchEngine(BaseScraper):
                 print(f"⚠️ GitHub Search 失败 ({label}): {e}")
 
         print(f"  抓取到 {len(items)} 条原始数据（去重后）")
+        return items
+
+    def enrich_items(self, items: list[RawItem]) -> list[RawItem]:
+        token = os.getenv("GH_MODELS_TOKEN")
+        if not token:
+            return items
+        badge_patterns = self.config.get("badge_patterns", _DEFAULT_BADGE_PATTERNS)
+        max_images = self.config.get("max_readme_images", 3)
+        oss_date = _oss_date_str(self.snapshot_date)
+        do_readme = _enrich_enabled(self.config, "github_readme")
+        do_languages = _enrich_enabled(self.config, "github_languages")
+        do_images = _enrich_enabled(self.config, "github_images")
+        do_star_history = _enrich_enabled(self.config, "star_history")
+        for item in items:
+            owner = item.extra.get("owner") or item.author
+            repo = item.extra.get("repo") or item.title.split("/", 1)[-1]
+            readme_raw = _fetch_readme_raw(owner, repo, token) if do_readme else ""
+            readme_clean = _clean_readme(readme_raw) if readme_raw else ""
+            if do_images and readme_raw:
+                readme_images = _extract_readme_images(readme_raw, owner, repo, max_images, badge_patterns)
+                item.extra["readme_images"] = upload_images_to_oss(readme_images, oss_date)
+            if do_star_history:
+                star_history = _star_history_url(owner, repo)
+                item.extra["star_history_url"] = upload_image_to_oss(star_history, oss_date) or star_history
+            lang_prefix = _fetch_languages(owner, repo, token) if do_languages else ""
+            if readme_clean or lang_prefix:
+                item.body_text = lang_prefix + readme_clean if readme_clean else lang_prefix + item.body_text
         return items

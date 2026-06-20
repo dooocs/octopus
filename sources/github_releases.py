@@ -59,6 +59,7 @@ class GitHubReleasesAdapter:
                 "sort_by": {"type": "string", "enum": ["asset_downloads", "published_at"]},
             },
             filters={"skip_prerelease": BOOLEAN, "min_asset_downloads": INTEGER},
+            enrich_names=["release_details"],
         ),
         default_input=default_input(
             source={
@@ -75,7 +76,9 @@ class GitHubReleasesAdapter:
             },
             fetch={"releases_per_repo": 5, "window_days": 14, "limit": 3, "sort_by": "asset_downloads"},
             filters={"skip_prerelease": True, "min_asset_downloads": 0},
+            enrich=[{"name": "release_details", "when": "always"}],
         ),
+        supported_enrichers=["release_details"],
         description="抓取 watched GitHub repositories 的近期 release，默认每天取 top3。",
     )
 
@@ -121,6 +124,7 @@ class GitHubReleasesAdapter:
                         url=str(release.get("html_url") or f"https://github.com/{repo}/releases"),
                         title=f"{repo} {release.get('name') or release.get('tag_name') or 'release'}",
                         content=str(release.get("body") or "")[:8000],
+                        raw={"release": release},
                         metrics={
                             "github_release_id": release.get("id"),
                             "asset_downloads": downloads,
@@ -140,6 +144,7 @@ class GitHubReleasesAdapter:
                                 for asset in assets[:10]
                             ],
                         },
+                        context_content={},
                         author_id=(release.get("author") or {}).get("login") or "",
                         author_url=(release.get("author") or {}).get("html_url") or "",
                         source_published_date=published_at,
@@ -167,6 +172,21 @@ class GitHubReleasesAdapter:
         records: list[SourceRecord],
         config: ScraperConfig,
     ) -> list[SourceRecord]:
+        for record in records:
+            release = record.raw.get("release") if isinstance(record.raw, dict) else {}
+            if not isinstance(release, dict):
+                continue
+            assets = release.get("assets") or []
+            record.context_content["release_notes"] = str(release.get("body") or "")[:12000]
+            record.context_content["asset_downloads"] = int(record.metrics.get("asset_downloads") or 0)
+            record.context_content["assets"] = [
+                {
+                    "name": asset.get("name"),
+                    "download_count": asset.get("download_count"),
+                    "browser_download_url": asset.get("browser_download_url"),
+                }
+                for asset in assets[:10]
+            ]
         return records
 
     def normalize(self, ctx: RunContext, record: SourceRecord, config: ScraperConfig) -> RawItem:
@@ -182,5 +202,6 @@ class GitHubReleasesAdapter:
             body_text=record.content,
             raw_metrics=record.metrics,
             extra=record.extra,
+            context_content=record.context_content,
             published_at=record.source_published_date,
         )

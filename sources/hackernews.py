@@ -18,9 +18,16 @@ class HackerNewsAdapter(LegacyEngineAdapter):
         input_schema_version=1,
         input_schema=input_schema(
             source={"feed": STRING},
-            fetch={"new_n": INTEGER, "cutoff_hours": INTEGER, "fetch_workers": INTEGER, "skip_domains": STRING_ARRAY},
+            fetch={
+                "new_n": INTEGER,
+                "cutoff_hours": INTEGER,
+                "fetch_workers": INTEGER,
+                "skip_domains": STRING_ARRAY,
+                "max_comments_to_fetch": INTEGER,
+                "max_comments_to_keep": INTEGER,
+            },
             filters={"min_score": INTEGER},
-            enrich_names=["article_body"],
+            enrich_names=["article_body", "top_comments"],
         ),
         default_input=default_input(
             source={"feed": "newstories"},
@@ -29,10 +36,15 @@ class HackerNewsAdapter(LegacyEngineAdapter):
                 "cutoff_hours": 36,
                 "fetch_workers": 5,
                 "skip_domains": ["twitter.com", "x.com", "medium.com", "zhihu.com"],
+                "max_comments_to_fetch": 30,
+                "max_comments_to_keep": 10,
             },
             filters={"min_score": 50},
-            enrich=[{"name": "article_body", "when": "has_external_url"}],
+            enrich=[
+                {"name": "article_body", "when": "has_external_url"},
+                {"name": "top_comments", "when": "always"},
+            ],
         ),
-        supported_enrichers=["article_body"],
+        supported_enrichers=["article_body", "top_comments"],
         description="抓取 Hacker News 高分新帖。",
     )

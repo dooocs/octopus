@@ -57,6 +57,45 @@ query Posts($postedAfter: DateTime!, $postedBefore: DateTime!) {
 }
 """
 
+GRAPHQL_QUERY_FALLBACK = """
+query Posts($postedAfter: DateTime!, $postedBefore: DateTime!) {
+    posts(postedAfter: $postedAfter, postedBefore: $postedBefore, order: VOTES, first: 50) {
+        edges {
+            node {
+                id
+                name
+                tagline
+                description
+                url
+                website
+                votesCount
+                commentsCount
+                createdAt
+                topics(first: 10) { edges { node { name slug } } }
+                makers { name username }
+            }
+        }
+    }
+}
+"""
+
+GRAPHQL_COMMENTS_QUERY = """
+query PostComments($id: ID!) {
+    post(id: $id) {
+        comments(first: 10) {
+            edges {
+                node {
+                    id
+                    body
+                    createdAt
+                    user { name username }
+                }
+            }
+        }
+    }
+}
+"""
+
 
 def _retry_post(url: str, json_body: dict, headers: dict, max_retries: int = 3) -> requests.Response:
     """指数退避重试：1s / 3s / 9s"""
@@ -90,9 +129,54 @@ def _pt_day_range(days_ago: int) -> tuple[str, str]:
     return start_pt.isoformat(), end_pt.isoformat()
 
 
+def _comment_nodes(node: dict) -> list[dict]:
+    comments = []
+    edges = node.get("comments", {}).get("edges", []) if isinstance(node.get("comments"), dict) else []
+    for edge in edges:
+        comment = edge.get("node", {}) if isinstance(edge, dict) else {}
+        body = (comment.get("body") or "").strip()
+        if not body:
+            continue
+        user = comment.get("user") or {}
+        comments.append(
+            {
+                "id": comment.get("id"),
+                "author": user.get("username") or user.get("name") or "",
+                "author_name": user.get("name") or "",
+                "text": body[:1000],
+                "created_at": comment.get("createdAt"),
+            }
+        )
+    return comments
+
+
+def _comments_from_payload(payload: dict) -> list[dict]:
+    data = payload.get("data") or {}
+    for key in ("post", "node"):
+        node = data.get(key)
+        if isinstance(node, dict):
+            return _comment_nodes(node)
+    edges = ((data.get("posts") or {}).get("edges") or []) if isinstance(data.get("posts"), dict) else []
+    if edges:
+        node = edges[0].get("node", {}) if isinstance(edges[0], dict) else {}
+        if isinstance(node, dict):
+            return _comment_nodes(node)
+    return []
+
+
+def _enrich_enabled(config: dict, name: str, default: bool = True) -> bool:
+    enrich = config.get("enrich")
+    if not isinstance(enrich, list):
+        return default
+    return any(isinstance(item, dict) and item.get("name") == name for item in enrich)
+
+
 @register("product_hunt")
 class ProductHuntEngine(BaseScraper):
     def fetch(self) -> list[RawItem]:
+        return self.enrich_items(self.discover_items())
+
+    def discover_items(self) -> list[RawItem]:
         # API token：优先 config，其次环境变量
         api_token = self.config.get("api_token") or os.environ.get("PRODUCTHUNT_TOKEN", "")
         if not api_token:
@@ -133,6 +217,16 @@ class ProductHuntEngine(BaseScraper):
                     return []
 
                 data = resp.json()
+                if data.get("errors") and not data.get("data", {}).get("posts"):
+                    fallback_body = {
+                        "query": GRAPHQL_QUERY_FALLBACK,
+                        "variables": {"postedAfter": posted_after, "postedBefore": posted_before},
+                    }
+                    resp = _retry_post(PH_GRAPHQL_URL, fallback_body, headers, max_retries=max_retries)
+                    if resp.status_code != 200:
+                        print(f"  ❌ Product Hunt fallback 返回 HTTP {resp.status_code}: {resp.text[:200]}")
+                        return []
+                    data = resp.json()
                 edges = data.get("data", {}).get("posts", {}).get("edges", [])
             except Exception as e:
                 print(f"  ❌ Product Hunt 请求失败: {e}")
@@ -224,6 +318,9 @@ class ProductHuntEngine(BaseScraper):
                         "tagline": tagline,
                         "source_tag": "product_hunt",
                     },
+                    context_content={
+                        "top_comments": [],
+                    },
                     published_at=published_at,
                 )
                 items.append(item)
@@ -233,4 +330,35 @@ class ProductHuntEngine(BaseScraper):
 
         duration_ms = int((time.time() - t0) * 1000)
         print(f"  [{self.name}] fetched={fetched} new={len(items)} skipped={skipped} errors={errors} duration={duration_ms}ms")
+        return items
+
+    def enrich_items(self, items: list[RawItem]) -> list[RawItem]:
+        if not _enrich_enabled(self.config, "product_comments"):
+            return items
+        api_token = self.config.get("api_token") or os.environ.get("PRODUCTHUNT_TOKEN", "")
+        if not api_token:
+            return items
+        max_retries = self.config.get("max_retries", 3)
+        headers = {
+            "Authorization": f"Bearer {api_token}",
+            "Content-Type": "application/json",
+        }
+        for item in items:
+            ph_id = item.extra.get("ph_id")
+            if not ph_id:
+                continue
+            try:
+                resp = _retry_post(
+                    PH_GRAPHQL_URL,
+                    {"query": GRAPHQL_COMMENTS_QUERY, "variables": {"id": ph_id}},
+                    headers,
+                    max_retries=max_retries,
+                )
+                if resp.status_code != 200:
+                    continue
+                comments = _comments_from_payload(resp.json())
+                item.context_content["top_comments"] = comments
+                item.context_content["top_comments_basis"] = "product_hunt_graphql_order"
+            except Exception:
+                continue
         return items

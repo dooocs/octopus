@@ -8,7 +8,7 @@ from infra.models import BaseScraper, RawItem
 from scrapers.registry import register
 from scrapers.github_search import (
     _fetch_readme_raw, _clean_readme, _extract_readme_images,
-    _fetch_languages, _oss_date_str, _star_history_url,
+    _fetch_languages, _oss_date_str, _star_history_url, _enrich_enabled,
 )
 from infra.oss import upload_images_to_oss, upload_image_to_oss
 
@@ -16,6 +16,9 @@ from infra.oss import upload_images_to_oss, upload_image_to_oss
 @register("github_trending")
 class GitHubTrendingEngine(BaseScraper):
     def fetch(self) -> list[RawItem]:
+        return self.enrich_items(self.discover_items())
+
+    def discover_items(self) -> list[RawItem]:
         token = os.getenv("GH_MODELS_TOKEN", "")
         try:
             res = http_get(
@@ -51,16 +54,6 @@ class GitHubTrendingEngine(BaseScraper):
                 parts = full_name.split("/")
                 owner, repo = (parts[0], parts[1]) if len(parts) == 2 else ("", full_name)
 
-                readme_raw = _fetch_readme_raw(owner, repo, token) if owner else ""
-                readme_images = _extract_readme_images(readme_raw, owner, repo) if readme_raw else []
-                readme_images = upload_images_to_oss(readme_images, oss_date)
-                readme_clean = _clean_readme(readme_raw) if readme_raw else ""
-                star_history = _star_history_url(owner, repo) if owner else ""
-                if star_history:
-                    star_history = upload_image_to_oss(star_history, oss_date) or star_history
-                lang_prefix = _fetch_languages(owner, repo, token) if owner else ""
-                body_text = lang_prefix + readme_clean if readme_clean else description
-
                 items.append(RawItem(
                     title=full_name,
                     original_url=repo_url,
@@ -68,12 +61,14 @@ class GitHubTrendingEngine(BaseScraper):
                     source_type=self.config.get("source_type", "REPO"),
                     content_type=self.config.get("content_type", "repo"),
                     author=owner,
-                    body_text=body_text,
+                    body_text=description,
                     raw_metrics={"stars": stars, "rank": rank},
                     extra={
                         "description": description,
-                        "readme_images": readme_images,
-                        "star_history_url": star_history,
+                        "owner": owner,
+                        "repo": repo,
+                        "readme_images": [],
+                        "star_history_url": "",
                     },
                 ))
 
@@ -82,3 +77,28 @@ class GitHubTrendingEngine(BaseScraper):
         except Exception as e:
             print(f"⚠️ GitHub Trending 失败: {e}")
             return []
+
+    def enrich_items(self, items: list[RawItem]) -> list[RawItem]:
+        token = os.getenv("GH_MODELS_TOKEN", "")
+        if not token:
+            return items
+        oss_date = _oss_date_str(self.snapshot_date)
+        do_readme = _enrich_enabled(self.config, "github_readme")
+        do_languages = _enrich_enabled(self.config, "github_languages")
+        do_images = _enrich_enabled(self.config, "github_images")
+        do_star_history = _enrich_enabled(self.config, "star_history")
+        for item in items:
+            owner = item.extra.get("owner") or item.author
+            repo = item.extra.get("repo") or item.title.split("/", 1)[-1]
+            readme_raw = _fetch_readme_raw(owner, repo, token) if owner and do_readme else ""
+            readme_clean = _clean_readme(readme_raw) if readme_raw else ""
+            if do_images and readme_raw:
+                readme_images = _extract_readme_images(readme_raw, owner, repo)
+                item.extra["readme_images"] = upload_images_to_oss(readme_images, oss_date)
+            if do_star_history and owner:
+                star_history = _star_history_url(owner, repo)
+                item.extra["star_history_url"] = upload_image_to_oss(star_history, oss_date) or star_history
+            lang_prefix = _fetch_languages(owner, repo, token) if owner and do_languages else ""
+            if readme_clean or lang_prefix:
+                item.body_text = lang_prefix + readme_clean if readme_clean else lang_prefix + item.body_text
+        return items

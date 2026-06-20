@@ -24,11 +24,14 @@ class ProductHuntAdapter(LegacyEngineAdapter):
                 "topic_whitelist": {"type": "array", "items": STRING},
                 "topic_blacklist": {"type": "array", "items": STRING},
             },
+            enrich_names=["product_comments"],
         ),
         default_input=default_input(
             filters={"min_votes": 200, "topic_whitelist": [], "topic_blacklist": []},
             fetch={"max_retries": 3},
+            enrich=[{"name": "product_comments", "when": "always"}],
         ),
         required_secrets=["PRODUCTHUNT_TOKEN"],
+        supported_enrichers=["product_comments"],
         description="抓取 Product Hunt 高票新产品。",
     )

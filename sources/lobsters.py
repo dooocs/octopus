@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import html
+import re
 from datetime import datetime, timezone, timedelta
 
 from core.contracts import ChannelSpec, RawItem, RunContext, ScraperConfig, SourceRecord
@@ -23,10 +25,21 @@ def _parse_datetime(value: str | None) -> datetime | None:
     return parsed
 
 
+def _clean_html(text: str) -> str:
+    value = html.unescape(text or "")
+    value = re.sub(r"<[^>]+>", " ", value)
+    value = re.sub(r"\s+", " ", value)
+    return value.strip()
+
+
 def _feed_url(feed: str, tag: str | None = None) -> str:
     if tag:
         return f"{LOBSTERS_BASE_URL}/t/{tag}.json"
     return f"{LOBSTERS_BASE_URL}/{feed}.json"
+
+
+def _story_url(short_id: str) -> str:
+    return f"{LOBSTERS_BASE_URL}/s/{short_id}.json"
 
 
 @register_adapter
@@ -40,19 +53,22 @@ class LobstersAdapter:
         input_schema_version=1,
         input_schema=input_schema(
             source={"feed": STRING, "tags": STRING_ARRAY},
-            fetch={"window_days": INTEGER, "limit": INTEGER},
+            fetch={"window_days": INTEGER, "limit": INTEGER, "comments_to_keep": INTEGER},
             filters={
                 "min_score": INTEGER,
                 "min_comments": INTEGER,
                 "tag_whitelist": STRING_ARRAY,
                 "tag_blacklist": STRING_ARRAY,
             },
+            enrich_names=["top_comments"],
         ),
         default_input=default_input(
             source={"feed": "hottest", "tags": []},
-            fetch={"window_days": 2, "limit": 3},
+            fetch={"window_days": 2, "limit": 3, "comments_to_keep": 10},
             filters={"min_score": 0, "min_comments": 0, "tag_whitelist": [], "tag_blacklist": []},
+            enrich=[{"name": "top_comments", "when": "always"}],
         ),
+        supported_enrichers=["top_comments"],
         description="抓取 Lobsters 热榜或指定 tag JSON，默认按 score/comment_count 取 top3。",
     )
 
@@ -118,6 +134,9 @@ class LobstersAdapter:
                             "source_tag": tag,
                             "user_is_author": story.get("user_is_author"),
                         },
+                        context_content={
+                            "top_comments": [],
+                        },
                         author_id=str(story.get("submitter_user") or ""),
                         author_url=f"{LOBSTERS_BASE_URL}/u/{story.get('submitter_user')}" if story.get("submitter_user") else "",
                         source_published_date=published_at,
@@ -134,12 +153,54 @@ class LobstersAdapter:
         )
         return records[:limit]
 
+    def _fetch_top_comments(self, short_id: str, limit: int) -> list[dict]:
+        if not short_id or limit <= 0:
+            return []
+        try:
+            response = http_get(
+                _story_url(short_id),
+                timeout=20,
+                headers={"User-Agent": "octopus-crawler/0.1"},
+            )
+            if response.status_code != 200:
+                return []
+            story = response.json()
+            if not isinstance(story, dict):
+                return []
+        except Exception:
+            return []
+        comments = []
+        for item in story.get("comments") or []:
+            if item.get("is_deleted") or item.get("is_moderated"):
+                continue
+            text = _clean_html(item.get("comment", ""))
+            if not text:
+                continue
+            comments.append(
+                {
+                    "id": item.get("short_id"),
+                    "author": item.get("commenting_user") or item.get("user") or "",
+                    "text": text[:1000],
+                    "score": int(item.get("score") or 0),
+                    "created_at": item.get("created_at"),
+                    "parent_comment": item.get("parent_comment"),
+                }
+            )
+        return sorted(comments, key=lambda item: item.get("score") or 0, reverse=True)[:limit]
+
     def enrich(
         self,
         ctx: RunContext,
         records: list[SourceRecord],
         config: ScraperConfig,
     ) -> list[SourceRecord]:
+        comments_to_keep = int(config.input.fetch.get("comments_to_keep") or 10)
+        if comments_to_keep <= 0:
+            return records
+        for record in records:
+            short_id = str(record.extra.get("short_id") or "")
+            record.context_content["top_comments"] = self._fetch_top_comments(short_id, comments_to_keep)
+            record.context_content["top_comments_basis"] = "comment_score"
         return records
 
     def normalize(self, ctx: RunContext, record: SourceRecord, config: ScraperConfig) -> RawItem:
@@ -155,5 +216,6 @@ class LobstersAdapter:
             body_text=record.content,
             raw_metrics=record.metrics,
             extra=record.extra,
+            context_content=record.context_content,
             published_at=record.source_published_date,
         )

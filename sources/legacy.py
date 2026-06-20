@@ -82,28 +82,10 @@ class LegacyEngineAdapter:
     engine_path: str = ""
 
     def discover(self, ctx: RunContext, config: ScraperConfig) -> list[SourceRecord]:
-        engine_cls = self._engine_cls()
-        engine = engine_cls(name=config.name, config=flat_config(config))
-        engine.snapshot_date = ctx.snapshot_date
-        items = engine.fetch()
-        records: list[SourceRecord] = []
-        for item in items:
-            records.append(
-                SourceRecord(
-                    identity=_identity_for_item(item),
-                    url=item.original_url,
-                    title=item.title,
-                    raw={"item": item},
-                    metrics=dict(item.raw_metrics or {}),
-                    content=item.body_text or "",
-                    context_content=dict(item.context_content or {}),
-                    extra=dict(item.extra or {}),
-                    author_id=item.author or "",
-                    author_url=item.author_url or "",
-                    source_published_date=item.published_at,
-                )
-            )
-        return records
+        engine = self._engine(config, ctx)
+        discover_items = getattr(engine, "discover_items", None)
+        items = discover_items() if callable(discover_items) else engine.fetch()
+        return [_record_from_item(item) for item in items]
 
     def enrich(
         self,
@@ -111,7 +93,13 @@ class LegacyEngineAdapter:
         records: list[SourceRecord],
         config: ScraperConfig,
     ) -> list[SourceRecord]:
-        return records
+        engine = self._engine(config, ctx)
+        enrich_items = getattr(engine, "enrich_items", None)
+        if not callable(enrich_items):
+            return records
+        items = [record.raw["item"] for record in records if "item" in record.raw]
+        enriched_items = enrich_items(items)
+        return [_record_from_item(item) for item in enriched_items]
 
     def normalize(self, ctx: RunContext, record: SourceRecord, config: ScraperConfig) -> RawItem:
         item = record.raw["item"]
@@ -120,6 +108,12 @@ class LegacyEngineAdapter:
         item.content_type = config.item_type
         item.scraper_slug = config.sub_source_type
         return item
+
+    def _engine(self, config: ScraperConfig, ctx: RunContext) -> Any:
+        engine_cls = self._engine_cls()
+        engine = engine_cls(name=config.name, config=flat_config(config))
+        engine.snapshot_date = ctx.snapshot_date
+        return engine
 
     @classmethod
     def _engine_cls(cls) -> type:
@@ -132,6 +126,22 @@ class LegacyEngineAdapter:
         engine_cls = getattr(module, class_name)
         cls.engine_cls = engine_cls
         return engine_cls
+
+
+def _record_from_item(item: Any) -> SourceRecord:
+    return SourceRecord(
+        identity=_identity_for_item(item),
+        url=item.original_url,
+        title=item.title,
+        raw={"item": item},
+        metrics=dict(item.raw_metrics or {}),
+        content=item.body_text or "",
+        context_content=dict(item.context_content or {}),
+        extra=dict(item.extra or {}),
+        author_id=item.author or "",
+        author_url=item.author_url or "",
+        source_published_date=item.published_at,
+    )
 
 
 def _identity_for_item(item: Any) -> str:
@@ -159,3 +169,4 @@ NUMBER = {"type": "number"}
 INTEGER = {"type": "integer"}
 BOOLEAN = {"type": "boolean"}
 STRING_ARRAY = {"type": "array", "items": {"type": "string"}}
+JSON_OBJECT = {"type": "object", "additionalProperties": True}

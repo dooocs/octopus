@@ -3,6 +3,7 @@
 import re
 import requests
 import feedparser
+import threading
 from datetime import datetime, timezone, timedelta
 from infra.http import http_get
 from infra.models import BaseScraper, RawItem
@@ -15,6 +16,13 @@ HEADERS = {
         "Chrome/120.0.0.0 Safari/537.36"
     )
 }
+
+try:
+    import trafilatura
+    _trafilatura_lock = threading.Lock()
+    HAS_TRAFILATURA = True
+except ImportError:
+    HAS_TRAFILATURA = False
 
 
 def _parse_date(entry) -> datetime | None:
@@ -38,9 +46,33 @@ def _is_retweet(title: str) -> bool:
     return title.strip().startswith("RT by @")
 
 
+def _fetch_full_text(url: str, timeout: int, max_chars: int) -> str:
+    if not HAS_TRAFILATURA:
+        return ""
+    try:
+        resp = http_get(url, timeout=timeout, headers=HEADERS)
+        if resp.status_code != 200:
+            return ""
+        with _trafilatura_lock:
+            content = trafilatura.extract(resp.text, include_comments=False, include_tables=True, no_fallback=False)
+        return (content or "").strip()[:max_chars]
+    except Exception:
+        return ""
+
+
+def _enrich_enabled(config: dict, name: str, default: bool = True) -> bool:
+    enrich = config.get("enrich")
+    if not isinstance(enrich, list):
+        return default
+    return any(isinstance(item, dict) and item.get("name") == name for item in enrich)
+
+
 @register("rss")
 class RSSFeedEngine(BaseScraper):
     def fetch(self) -> list[RawItem]:
+        return self.enrich_items(self.discover_items())
+
+    def discover_items(self) -> list[RawItem]:
         url = self.config.get("url", "")
         if not url:
             print(f"  ⚠️ [{self.name}] 无 url，跳过")
@@ -51,6 +83,8 @@ class RSSFeedEngine(BaseScraper):
         cutoff = datetime.now(timezone.utc) - timedelta(hours=fetch_window)
         source_type = self.config.get("source_type", "ARTICLE")
         content_type = self.config.get("content_type", "article")
+        metadata = self.config.get("metadata") if isinstance(self.config.get("metadata"), dict) else {}
+        max_content_chars = int(self.config.get("max_content_chars", 12000))
 
         try:
             resp = http_get(url, timeout=15, headers=HEADERS)
@@ -74,12 +108,15 @@ class RSSFeedEngine(BaseScraper):
                 if not title or not entry_url:
                     continue
 
-                body_text = _clean_text(getattr(entry, "summary", "") or getattr(entry, "description", "") or "")
+                feed_summary = _clean_text(getattr(entry, "summary", "") or getattr(entry, "description", "") or "")
                 published_at = _parse_date(entry)
 
                 if published_at is not None and published_at < cutoff:
                     skipped_old += 1
                     break
+
+                extra = {"source_tag": self.config.get("source_tag", ""), "feed_url": url}
+                extra.update(metadata)
 
                 items.append(RawItem(
                     title=title,
@@ -88,9 +125,13 @@ class RSSFeedEngine(BaseScraper):
                     source_type=source_type,
                     content_type=content_type,
                     author=(getattr(entry, "author", "") or "").strip(),
-                    body_text=body_text[:1000],
+                    body_text=feed_summary[:max_content_chars],
                     raw_metrics={},
-                    extra={"source_tag": self.config.get("source_tag", ""), "feed_url": url},
+                    extra=extra,
+                    context_content={
+                        "feed_summary": feed_summary,
+                        "full_text_fetched": False,
+                    },
                     published_at=published_at,
                 ))
 
@@ -106,3 +147,17 @@ class RSSFeedEngine(BaseScraper):
         except Exception as e:
             print(f"  ❌ [{self.name}] 失败: {e}")
             return []
+
+    def enrich_items(self, items: list[RawItem]) -> list[RawItem]:
+        if not _enrich_enabled(self.config, "full_text", default=bool(self.config.get("fetch_full_text", True))):
+            return items
+        if not self.config.get("fetch_full_text", True):
+            return items
+        full_text_timeout = int(self.config.get("full_text_timeout", 15))
+        max_content_chars = int(self.config.get("max_content_chars", 12000))
+        for item in items:
+            full_text = _fetch_full_text(item.original_url, full_text_timeout, max_content_chars)
+            if full_text:
+                item.body_text = full_text[:max_content_chars]
+            item.context_content["full_text_fetched"] = bool(full_text)
+        return items

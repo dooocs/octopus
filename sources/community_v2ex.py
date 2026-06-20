@@ -18,11 +18,16 @@ class V2EXAdapter(LegacyEngineAdapter):
         input_schema_version=1,
         input_schema=input_schema(
             source={"source_tag": STRING},
-            fetch={"top_n": INTEGER, "max_replies_to_fetch": INTEGER, "max_replies_to_keep": INTEGER},
+            fetch={
+                "top_n": INTEGER,
+                "top_clicked_limit": INTEGER,
+                "max_replies_to_fetch": INTEGER,
+                "max_replies_to_keep": INTEGER,
+            },
             enrich_names=["top_replies"],
         ),
         default_input=default_input(
-            fetch={"top_n": 10, "max_replies_to_fetch": 30, "max_replies_to_keep": 15},
+            fetch={"top_n": 10, "top_clicked_limit": 10, "max_replies_to_fetch": 30, "max_replies_to_keep": 10},
             enrich=[{"name": "top_replies", "when": "always"}],
         ),
         supported_enrichers=["top_replies"],

@@ -137,6 +137,52 @@ class NpmPackageReleasesAdapterTest(unittest.TestCase):
         self.assertEqual(result.rows[0]["metrics"]["downloads_weekly"], 12345)
         self.assertEqual(result.rows[0]["metrics"]["dependents"], 99)
         self.assertEqual(result.rows[0]["extra"]["ecosystem"], "npm")
+        self.assertEqual(result.rows[0]["context_content"]["release_notes"], "Demo package")
+
+    def test_npm_watched_package_fetches_downloads_and_release_notes(self) -> None:
+        registry_payload = {
+            "dist-tags": {"latest": "1.2.3"},
+            "time": {"1.2.3": "2026-06-19T09:00:00.000Z"},
+            "versions": {
+                "1.2.3": {
+                    "description": "Release description",
+                    "readme": "Detailed release notes",
+                    "author": "Alice",
+                }
+            },
+        }
+
+        def fake_get(url: str, **kwargs: object) -> _FakeResponse:
+            if "last-week" in url:
+                return _FakeResponse({"downloads": 1000})
+            if "last-month" in url:
+                return _FakeResponse({"downloads": 4000})
+            return _FakeResponse(registry_payload)
+
+        config = {
+            "type": "npm_package_releases",
+            "name": "npm",
+            "enabled": True,
+            "source_type": "package_registry",
+            "sub_source_type": "npm_package_releases",
+            "item_type": "package_release",
+            "config": {
+                "source": {"search_queries": [], "packages": ["demo-ai"]},
+                "fetch": {"search_size": 1, "window_days": 7, "limit": 1},
+                "filters": {"min_weekly_downloads": 1, "skip_prerelease": True},
+                "enrich": [],
+                "runtime": {},
+            },
+        }
+
+        with patch("sources.package_releases.http_get", side_effect=fake_get):
+            result = run_config(config, "2026-06-20")
+
+        row = result.rows[0]
+        self.assertEqual(row["metrics"]["downloads_weekly"], 1000)
+        self.assertEqual(row["metrics"]["downloads_monthly"], 4000)
+        self.assertIn("Detailed release notes", row["context_content"]["release_notes"])
+        self.assertEqual(row["author_id"], "Alice")
 
 
 if __name__ == "__main__":
