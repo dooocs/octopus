@@ -113,6 +113,8 @@ npm run build
 
 - Check `git status -sb` before editing. If the worktree contains unrelated
   user changes, keep them out of your branch and staging area.
+- For GitHub-facing requests such as PRs, issues, checks, workflow runs, and
+  repository metadata, use the local `gh` CLI by default.
 - Use `codex/<description>` branch names for Codex-created work unless the user
   asks for another name.
 - Stage explicit files when the worktree is mixed.
