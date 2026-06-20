@@ -48,14 +48,14 @@ def _config_snapshot(config: dict[str, Any]) -> dict[str, Any]:
     return {
         "id": config.get("id"),
         "name": config.get("name"),
-        "scraper": config.get("type"),
+        "scraper": config.get("scraper"),
         "enabled": config.get("enabled"),
         "priority": config.get("priority"),
         "source_type": config.get("source_type"),
         "sub_source_type": config.get("sub_source_type"),
         "item_type": config.get("item_type"),
         "input_schema_version": config.get("input_schema_version"),
-        "input": config.get("config") or {},
+        "input": config.get("input") or {},
     }
 
 
@@ -84,7 +84,7 @@ def run_global_scrape(args: argparse.Namespace) -> int:
 
     print(f"loaded enabled configs: runnable={len(configs)}, skipped={len(skipped)}")
     if skipped:
-        skipped_names = ", ".join(f"{c['name']}({c['type']})" for c in skipped)
+        skipped_names = ", ".join(f"{c['name']}({c['scraper']})" for c in skipped)
         print(f"skipped unsupported scraper configs: {skipped_names}")
 
     output_sink = JsonlSink(Path(args.output)) if args.output else None
@@ -107,14 +107,14 @@ def run_global_scrape(args: argparse.Namespace) -> int:
     failed = 0
 
     for config in configs:
-        print(f"running scraper: {config['name']} [{config['type']}]")
+        print(f"running scraper: {config['name']} [{config['scraper']}]")
         started = time.monotonic()
         task_id = client.create_scrape_task(
             {
                 "run_id": run_id,
                 "scraper_config_id": config.get("id"),
                 "snapshot_date": args.date,
-                "scraper": config.get("type"),
+                "scraper": config.get("scraper"),
                 "sub_source_type": config.get("sub_source_type"),
                 "status": "running",
                 "stage": "validate_config",
@@ -123,9 +123,15 @@ def run_global_scrape(args: argparse.Namespace) -> int:
         )
 
         try:
-            _update_task_safe(client, task_id, {"stage": "discover"})
             state = client.fetch_scraper_state(str(config.get("id"))) if config.get("id") else {}
-            result = run_config(config, args.date, run_id=run_id, task_id=task_id, state=state)
+            result = run_config(
+                config,
+                args.date,
+                run_id=run_id,
+                task_id=task_id,
+                state=state,
+                on_stage=lambda stage: _update_task_safe(client, task_id, {"stage": stage}),
+            )
 
             _update_task_safe(
                 client,
@@ -177,7 +183,7 @@ def run_global_scrape(args: argparse.Namespace) -> int:
         except Exception as exc:
             duration_ms = int((time.monotonic() - started) * 1000)
             failed += 1
-            print(f"scraper failed: {config['name']} [{config['type']}] {exc}")
+            print(f"scraper failed: {config['name']} [{config['scraper']}] {exc}")
             _update_task_safe(
                 client,
                 task_id,

@@ -59,9 +59,9 @@ def _get_bucket():
         return None
 
 
-def _guess_ext(url: str, content_type: str = "") -> str:
-    if content_type:
-        ext = _EXT_MAP.get(content_type.split(";")[0].strip().lower())
+def _guess_ext(url: str, mime_type: str = "") -> str:
+    if mime_type:
+        ext = _EXT_MAP.get(mime_type.split(";")[0].strip().lower())
         if ext:
             return ext
 
@@ -108,17 +108,17 @@ def upload_image_to_oss(url: str, date_str: str | None = None) -> str | None:
             print(f"  ⚠️ 图片下载失败 [{resp.status_code}]: {url[:80]}")
             return None
 
-        content_type = resp.headers.get("Content-Type", "")
+        mime_type = resp.headers.get("Content-Type", "")
         image_data = resp.content
 
         if not image_data or len(image_data) < 100:
             return None
 
-        ext = _guess_ext(url, content_type)
+        ext = _guess_ext(url, mime_type)
         oss_key = _build_oss_key(url, ext, date_str)
 
         bucket.put_object(oss_key, image_data, headers={
-            "Content-Type": content_type or "application/octet-stream",
+            "Content-Type": mime_type or "application/octet-stream",
         })
 
         public_url = f"https://{OSS_CUSTOM_DOMAIN}/{oss_key}"

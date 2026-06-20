@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
-from core.contracts import ChannelSpec, InputConfig, RawItem, RunContext, ScraperConfig, SourceRecord
+from core.contracts import ChannelSpec, InputConfig, RawItem, RunContext, ScraperConfig, SourceAdapterBase, SourceRecord
 from core.registry import export_specs, register_adapter
 from core.runner import run_config
 from pipeline.sinks import JsonlSink
@@ -84,13 +84,13 @@ class ResearchMetadataTest(unittest.TestCase):
 </rss>
 """
         config = {
-            "type": "rss",
+            "scraper": "rss",
             "name": "Demo SEC Filings",
             "enabled": True,
             "source_type": "regulatory",
             "sub_source_type": "sec_edgar_demo_filings",
             "item_type": "filing",
-            "config": {
+            "input": {
                 "source": {
                     "url": "https://example.com/feed.xml",
                     "source_tag": "sec_edgar",
@@ -107,7 +107,7 @@ class ResearchMetadataTest(unittest.TestCase):
             },
         }
 
-        with patch("scrapers.rss_feed.http_get", return_value=_FakeTextResponse(rss_text)):
+        with patch("sources.rss.http_get", return_value=_FakeTextResponse(rss_text)):
             result = run_config(config, "2026-06-20")
 
         self.assertEqual(len(result.rows), 1)
@@ -147,7 +147,7 @@ class MigrationContractTest(unittest.TestCase):
 
 
 @register_adapter
-class _TestAdapter:
+class _TestAdapter(SourceAdapterBase):
     spec = ChannelSpec(
         scraper="unit_test_adapter",
         label="Unit Test",
@@ -205,13 +205,13 @@ class RunnerContractTest(unittest.TestCase):
     def test_run_config_returns_valid_rows(self) -> None:
         result = run_config(
             {
-                "type": "unit_test_adapter",
+                "scraper": "unit_test_adapter",
                 "name": "Unit",
                 "enabled": True,
                 "source_type": "test",
                 "sub_source_type": "unit",
                 "item_type": "article",
-                "config": {"source": {}, "fetch": {}, "filters": {}, "enrich": [], "runtime": {}},
+                "input": {"source": {}, "fetch": {}, "filters": {}, "enrich": [], "runtime": {}},
             },
             "2026-06-19",
         )
@@ -219,6 +219,25 @@ class RunnerContractTest(unittest.TestCase):
         self.assertEqual(result.items_discovered, 1)
         self.assertEqual(result.rows[0]["sub_source_type"], "unit")
         self.assertEqual(result.rows[0]["metrics"], {"score": 1})
+
+    def test_run_config_reports_native_stage_order(self) -> None:
+        stages: list[str] = []
+
+        run_config(
+            {
+                "scraper": "unit_test_adapter",
+                "name": "Unit",
+                "enabled": True,
+                "source_type": "test",
+                "sub_source_type": "unit",
+                "item_type": "article",
+                "input": {"source": {}, "fetch": {}, "filters": {}, "enrich": [], "runtime": {}},
+            },
+            "2026-06-19",
+            on_stage=stages.append,
+        )
+
+        self.assertEqual(stages, ["discover", "enrich", "select", "normalize", "validate_output"])
 
 
 class SinkContractTest(unittest.TestCase):

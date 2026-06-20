@@ -39,8 +39,8 @@ create table if not exists public.octp_scrape_tasks (
     check (stage in (
       'validate_config',
       'discover',
-      'filter',
       'enrich',
+      'select',
       'normalize',
       'validate_output',
       'sink',
@@ -61,6 +61,22 @@ create table if not exists public.octp_scrape_tasks (
   created_date timestamptz not null default now(),
   updated_date timestamptz not null default now()
 );
+
+alter table public.octp_scrape_tasks
+drop constraint if exists octp_scrape_tasks_stage_check;
+
+alter table public.octp_scrape_tasks
+add constraint octp_scrape_tasks_stage_check
+check (stage in (
+  'validate_config',
+  'discover',
+  'enrich',
+  'select',
+  'normalize',
+  'validate_output',
+  'sink',
+  'done'
+));
 
 create table if not exists public.octp_scraper_state (
   scraper_config_id uuid primary key references public.octp_scraper_configs(id) on delete cascade,

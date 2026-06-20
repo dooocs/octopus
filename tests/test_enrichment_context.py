@@ -24,7 +24,7 @@ class _FakeResponse:
 
 
 class EnrichPhaseBoundaryTest(unittest.TestCase):
-    def test_legacy_adapter_runs_full_text_only_in_enrich_phase(self) -> None:
+    def test_native_adapter_runs_full_text_only_in_enrich_phase(self) -> None:
         rss_text = """<?xml version="1.0" encoding="UTF-8" ?>
 <rss version="2.0">
   <channel>
@@ -37,13 +37,13 @@ class EnrichPhaseBoundaryTest(unittest.TestCase):
 </rss>
 """
         config_row = {
-            "type": "rss",
+            "scraper": "rss",
             "name": "Feed",
             "enabled": True,
             "source_type": "ARTICLE",
             "sub_source_type": "feed",
             "item_type": "article",
-            "config": {
+            "input": {
                 "source": {"url": "https://example.com/feed.xml"},
                 "fetch": {"max_items": 1, "fetch_window_hours": 999999, "fetch_full_text": True},
                 "filters": {},
@@ -55,8 +55,8 @@ class EnrichPhaseBoundaryTest(unittest.TestCase):
         config = ScraperConfig.from_mapping(config_row)
         ctx = RunContext(snapshot_date="2026-06-20")
 
-        with patch("scrapers.rss_feed.http_get", return_value=_FakeResponse(text=rss_text)), patch(
-            "scrapers.rss_feed._fetch_full_text",
+        with patch("sources.rss.http_get", return_value=_FakeResponse(text=rss_text)), patch(
+            "sources.rss._fetch_full_text",
             return_value="Full article text",
         ) as fetch_full_text:
             records = adapter.discover(ctx, config)
@@ -99,13 +99,13 @@ class EnrichPhaseBoundaryTest(unittest.TestCase):
             return _FakeResponse(detail_payload)
 
         config_row = {
-            "type": "lobsters",
+            "scraper": "lobsters",
             "name": "Lobsters",
             "enabled": True,
             "source_type": "NEWS",
             "sub_source_type": "lobsters_top",
             "item_type": "article",
-            "config": {
+            "input": {
                 "source": {"feed": "hottest", "tags": []},
                 "fetch": {"window_days": 7, "limit": 1, "comments_to_keep": 10},
                 "filters": {"min_score": 0, "min_comments": 0, "tag_whitelist": [], "tag_blacklist": []},
@@ -157,13 +157,13 @@ class HackerNewsEnrichmentTest(unittest.TestCase):
             return _FakeResponse(text="<html><article>Original article body</article></html>")
 
         config = {
-            "type": "hackernews",
+            "scraper": "hackernews",
             "name": "HN",
             "enabled": True,
             "source_type": "NEWS",
             "sub_source_type": "hackernews",
             "item_type": "article",
-            "config": {
+            "input": {
                 "source": {"feed": "newstories"},
                 "fetch": {
                     "new_n": 1,
@@ -182,8 +182,8 @@ class HackerNewsEnrichmentTest(unittest.TestCase):
             },
         }
 
-        with patch("scrapers.hackernews.http_get", side_effect=fake_get), patch(
-            "scrapers.hackernews.trafilatura.extract",
+        with patch("sources.hackernews.http_get", side_effect=fake_get), patch(
+            "sources.hackernews.trafilatura.extract",
             return_value="Original article body",
         ):
             result = run_config(config, "2026-06-20")
@@ -210,13 +210,13 @@ class FeedFullTextEnrichmentTest(unittest.TestCase):
 </rss>
 """
         config = {
-            "type": "rss",
+            "scraper": "rss",
             "name": "Feed",
             "enabled": True,
             "source_type": "ARTICLE",
             "sub_source_type": "feed",
             "item_type": "article",
-            "config": {
+            "input": {
                 "source": {"url": "https://example.com/feed.xml"},
                 "fetch": {
                     "max_items": 1,
@@ -231,8 +231,8 @@ class FeedFullTextEnrichmentTest(unittest.TestCase):
             },
         }
 
-        with patch("scrapers.rss_feed.http_get", return_value=_FakeResponse(text=rss_text)), patch(
-            "scrapers.rss_feed._fetch_full_text",
+        with patch("sources.rss.http_get", return_value=_FakeResponse(text=rss_text)), patch(
+            "sources.rss._fetch_full_text",
             return_value="Full article text",
         ):
             result = run_config(config, "2026-06-20")
@@ -250,13 +250,13 @@ class AIBlogFullTextEnrichmentTest(unittest.TestCase):
 </body></html>
 """
         config = {
-            "type": "ai_blog",
+            "scraper": "ai_blog",
             "name": "AI Blog",
             "enabled": True,
             "source_type": "website",
             "sub_source_type": "ai_blog",
             "item_type": "article",
-            "config": {
+            "input": {
                 "source": {"base_url": "https://example.com", "news_url": "https://example.com/news", "link_selector": "a"},
                 "fetch": {"fetch_window_hours": 999999, "fetch_full_text": True, "full_text_timeout": 5, "max_content_chars": 12000},
                 "filters": {},
@@ -265,8 +265,8 @@ class AIBlogFullTextEnrichmentTest(unittest.TestCase):
             },
         }
 
-        with patch("scrapers.ai_blog.http_get", return_value=_FakeResponse(text=list_html)), patch(
-            "scrapers.ai_blog._fetch_full_text",
+        with patch("sources.ai_blog.http_get", return_value=_FakeResponse(text=list_html)), patch(
+            "sources.ai_blog._fetch_full_text",
             return_value="Full blog article",
         ):
             result = run_config(config, "2026-06-20")
@@ -301,13 +301,13 @@ class V2EXEnrichmentTest(unittest.TestCase):
             return _FakeResponse(text="<html>999 次点击</html>")
 
         config = {
-            "type": "community_v2ex",
+            "scraper": "community_v2ex",
             "name": "V2EX",
             "enabled": True,
             "source_type": "community",
             "sub_source_type": "v2ex_hot",
             "item_type": "discussion",
-            "config": {
+            "input": {
                 "source": {},
                 "fetch": {"top_n": 1, "top_clicked_limit": 1, "max_replies_to_fetch": 10, "max_replies_to_keep": 10},
                 "filters": {},
@@ -316,7 +316,7 @@ class V2EXEnrichmentTest(unittest.TestCase):
             },
         }
 
-        with patch("scrapers.community_v2ex.http_get", side_effect=fake_get):
+        with patch("sources.community_v2ex.http_get", side_effect=fake_get):
             result = run_config(config, "2026-06-20")
 
         row = result.rows[0]
@@ -358,13 +358,13 @@ class LinuxDoEnrichmentTest(unittest.TestCase):
             return _FakeResponse(topic_payload)
 
         config = {
-            "type": "community_linuxdo",
+            "scraper": "community_linuxdo",
             "name": "LinuxDo",
             "enabled": True,
             "source_type": "community",
             "sub_source_type": "linuxdo_daily",
             "item_type": "discussion",
-            "config": {
+            "input": {
                 "source": {},
                 "fetch": {"top_n": 1, "limit": 1, "max_replies_to_fetch": 10, "max_replies_to_keep": 10},
                 "filters": {},
@@ -373,7 +373,7 @@ class LinuxDoEnrichmentTest(unittest.TestCase):
             },
         }
 
-        with patch("scrapers.community_linuxdo.http_get", side_effect=fake_get):
+        with patch("sources.community_linuxdo.http_get", side_effect=fake_get):
             result = run_config(config, "2026-06-20")
 
         row = result.rows[0]
@@ -419,13 +419,13 @@ class ProductHuntEnrichmentTest(unittest.TestCase):
             }
         }
         config = {
-            "type": "product_hunt",
+            "scraper": "product_hunt",
             "name": "PH",
             "enabled": True,
             "source_type": "product_platform",
             "sub_source_type": "product_hunt",
             "item_type": "product",
-            "config": {
+            "input": {
                 "source": {},
                 "fetch": {"max_retries": 1},
                 "filters": {"min_votes": 1, "topic_whitelist": [], "topic_blacklist": []},
@@ -434,10 +434,7 @@ class ProductHuntEnrichmentTest(unittest.TestCase):
             },
         }
 
-        with patch.dict("os.environ", {"PRODUCTHUNT_TOKEN": "token"}), patch(
-            "scrapers.product_hunt.http_post",
-            return_value=_FakeResponse(payload),
-        ):
+        with patch.dict("os.environ", {"PRODUCTHUNT_TOKEN": "token"}), patch("sources.product_hunt.http_post", return_value=_FakeResponse(payload)):
             result = run_config(config, "2026-06-20")
 
         self.assertEqual(result.rows[0]["context_content"]["top_comments"][0]["text"], "Useful launch")
@@ -485,13 +482,13 @@ class RedditEnrichmentTest(unittest.TestCase):
             return _FakeResponse(comments_payload)
 
         config = {
-            "type": "reddit",
+            "scraper": "reddit",
             "name": "Reddit",
             "enabled": True,
             "source_type": "community",
             "sub_source_type": "reddit_top",
             "item_type": "discussion",
-            "config": {
+            "input": {
                 "source": {"subreddit": "LocalLLaMA"},
                 "fetch": {"max_retries": 1, "post_limit": 1, "max_comments_to_keep": 10},
                 "filters": {"min_score": 1, "skip_nsfw": True, "skip_stickied": True, "skip_discussion_below": 0, "skip_self_text_below": 0},
@@ -501,7 +498,7 @@ class RedditEnrichmentTest(unittest.TestCase):
         }
 
         with patch.dict("os.environ", {"REDDIT_CLIENT_ID": "", "REDDIT_CLIENT_SECRET": ""}), patch(
-            "scrapers.reddit.http_get",
+            "sources.reddit.http_get",
             side_effect=fake_get,
         ):
             result = run_config(config, "2026-06-20")
@@ -546,13 +543,13 @@ class RedditEnrichmentTest(unittest.TestCase):
             return _FakeResponse(top_payload)
 
         config = {
-            "type": "reddit",
+            "scraper": "reddit",
             "name": "Reddit",
             "enabled": True,
             "source_type": "community",
             "sub_source_type": "reddit_top",
             "item_type": "discussion",
-            "config": {
+            "input": {
                 "source": {"subreddit": "LocalLLaMA"},
                 "fetch": {"max_retries": 1, "post_limit": 1, "max_comments_to_keep": 10},
                 "filters": {"min_score": 1, "skip_nsfw": True, "skip_stickied": True, "skip_discussion_below": 0, "skip_self_text_below": 0},
@@ -562,9 +559,9 @@ class RedditEnrichmentTest(unittest.TestCase):
         }
 
         with patch.dict("os.environ", {"REDDIT_CLIENT_ID": "client", "REDDIT_CLIENT_SECRET": "secret"}), patch(
-            "scrapers.reddit.http_post",
+            "sources.reddit.http_post",
             return_value=_FakeResponse(token_payload),
-        ), patch("scrapers.reddit.http_get", side_effect=fake_get):
+        ), patch("sources.reddit.http_get", side_effect=fake_get):
             result = run_config(config, "2026-06-20")
 
         row = result.rows[0]
@@ -611,13 +608,13 @@ class OpenReviewEnrichmentTest(unittest.TestCase):
             return _FakeResponse(note_payload)
 
         config = {
-            "type": "openreview",
+            "scraper": "openreview",
             "name": "OpenReview",
             "enabled": True,
             "source_type": "research",
             "sub_source_type": "openreview",
             "item_type": "paper",
-            "config": {
+            "input": {
                 "source": {"venue_ids": ["Venue"], "invitations": []},
                 "fetch": {"per_source": 1, "limit": 1, "reply_limit": 10, "sort_by": "reply_count"},
                 "filters": {"min_reply_count": 0},
@@ -651,13 +648,13 @@ class GitHubReleasesEnrichmentTest(unittest.TestCase):
             }
         ]
         config = {
-            "type": "github_releases",
+            "scraper": "github_releases",
             "name": "GitHub Releases",
             "enabled": True,
             "source_type": "code_host",
             "sub_source_type": "github_releases",
             "item_type": "release",
-            "config": {
+            "input": {
                 "source": {"repositories": ["org/repo"]},
                 "fetch": {"releases_per_repo": 1, "window_days": 7, "limit": 1, "sort_by": "asset_downloads"},
                 "filters": {"skip_prerelease": True, "min_asset_downloads": 0},
@@ -704,13 +701,13 @@ class PyPIDownloadsEnrichmentTest(unittest.TestCase):
             return _FakeResponse(package_payload)
 
         config = {
-            "type": "pypi_package_releases",
+            "scraper": "pypi_package_releases",
             "name": "PyPI",
             "enabled": True,
             "source_type": "package_registry",
             "sub_source_type": "pypi_package_releases",
             "item_type": "package_release",
-            "config": {
+            "input": {
                 "source": {"packages": ["demo"]},
                 "fetch": {"window_days": 7, "limit": 1, "fetch_downloads": True},
                 "filters": {"skip_prerelease": True, "skip_yanked": True},
@@ -757,13 +754,13 @@ class LobstersEnrichmentTest(unittest.TestCase):
             return _FakeResponse(detail_payload)
 
         config = {
-            "type": "lobsters",
+            "scraper": "lobsters",
             "name": "Lobsters",
             "enabled": True,
             "source_type": "NEWS",
             "sub_source_type": "lobsters_top",
             "item_type": "article",
-            "config": {
+            "input": {
                 "source": {"feed": "hottest", "tags": []},
                 "fetch": {"window_days": 7, "limit": 1, "comments_to_keep": 10},
                 "filters": {"min_score": 0, "min_comments": 0, "tag_whitelist": [], "tag_blacklist": []},

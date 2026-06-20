@@ -7,8 +7,8 @@ explicitly says otherwise.
 
 ## Project Shape
 
-- `scrapers/`: source-specific crawler engines. Keep source-specific request,
-  parsing, and normalization logic here.
+- `sources/`: source-specific adapter implementations. Keep source-specific
+  request, parsing, enrichment, selection, and normalization logic here.
 - `infra/models.py`: shared output model for crawler rows.
 - `infra/dao/`: Aliyun RDS MySQL access. Use `OctopusDao` as the business-code
   entry point instead of importing table-specific DAO classes directly.
@@ -62,7 +62,7 @@ python -m scripts.global_scrape --continue-on-error --write-rds
 Run verification:
 
 ```bash
-python -m compileall infra scrapers scripts tests
+python -m compileall core infra pipeline sources scripts tests
 python -m unittest discover tests
 ```
 
@@ -100,8 +100,8 @@ npm run build
 
 - Keep scraper changes idempotent where possible. Repeated runs for the same
   `snapshot_date` should not create duplicate logical items.
-- Preserve the existing source registry pattern in `scrapers/registry.py` when
-  adding or renaming scraper engines.
+- Preserve the adapter registry pattern in `core/registry.py` when adding or
+  renaming source adapters.
 - Keep SQL migrations, Python models, DAO mappings, Supabase helpers, and web
   TypeScript types aligned when changing table or payload shapes.
 - Prefer narrow, source-specific tests for scraper changes and broader model or

@@ -7,13 +7,13 @@ from infra.models import RawItem
 
 
 class RawItemOutputContractTest(unittest.TestCase):
-    def test_to_output_dict_maps_legacy_scraper_fields(self) -> None:
+    def test_to_output_dict_maps_raw_item_fields(self) -> None:
         item = RawItem(
             title="Demo",
             original_url="https://example.com/demo",
             source_name="Example RSS",
             source_type="website",
-            content_type="article",
+            item_type="article",
             author="alice",
             author_url="https://example.com/alice",
             body_text="Main body",

@@ -4,11 +4,11 @@ import html
 import re
 from datetime import datetime, timezone, timedelta
 
-from core.contracts import ChannelSpec, RawItem, RunContext, ScraperConfig, SourceRecord
+from core.contracts import ChannelSpec, RawItem, RunContext, ScraperConfig, SourceAdapterBase, SourceRecord
 from core.registry import register_adapter
 from infra.http import http_get
 
-from .legacy import INTEGER, STRING, STRING_ARRAY, default_input, input_schema
+from .spec_helpers import INTEGER, STRING, STRING_ARRAY, default_input, input_schema
 
 LOBSTERS_BASE_URL = "https://lobste.rs"
 
@@ -43,7 +43,7 @@ def _story_url(short_id: str) -> str:
 
 
 @register_adapter
-class LobstersAdapter:
+class LobstersAdapter(SourceAdapterBase):
     spec = ChannelSpec(
         scraper="lobsters",
         label="Lobsters",

@@ -25,7 +25,7 @@ jobs:
         run: python -m pip install .
 
       - name: Compile Python files
-        run: python -m compileall core infra pipeline sources scrapers scripts tests
+        run: python -m compileall core infra pipeline sources scripts tests
 
       - name: Run tests
         run: python -m unittest discover tests

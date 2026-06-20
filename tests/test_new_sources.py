@@ -66,13 +66,13 @@ class LobstersAdapterTest(unittest.TestCase):
             },
         ]
         config = {
-            "type": "lobsters",
+            "scraper": "lobsters",
             "name": "Lobsters",
             "enabled": True,
             "source_type": "community",
             "sub_source_type": "lobsters",
             "item_type": "article",
-            "config": {
+            "input": {
                 "source": {"feed": "hottest", "tags": []},
                 "fetch": {"window_days": 7, "limit": 1},
                 "filters": {"min_score": 0, "min_comments": 0, "tag_whitelist": [], "tag_blacklist": []},
@@ -115,13 +115,13 @@ class NpmPackageReleasesAdapterTest(unittest.TestCase):
             ]
         }
         config = {
-            "type": "npm_package_releases",
+            "scraper": "npm_package_releases",
             "name": "npm",
             "enabled": True,
             "source_type": "package_registry",
             "sub_source_type": "npm_package_releases",
             "item_type": "package_release",
-            "config": {
+            "input": {
                 "source": {"search_queries": [{"q": "keywords:ai", "label": "ai"}], "packages": []},
                 "fetch": {"search_size": 1, "window_days": 7, "limit": 1},
                 "filters": {"min_weekly_downloads": 1000, "skip_prerelease": True},
@@ -160,13 +160,13 @@ class NpmPackageReleasesAdapterTest(unittest.TestCase):
             return _FakeResponse(registry_payload)
 
         config = {
-            "type": "npm_package_releases",
+            "scraper": "npm_package_releases",
             "name": "npm",
             "enabled": True,
             "source_type": "package_registry",
             "sub_source_type": "npm_package_releases",
             "item_type": "package_release",
-            "config": {
+            "input": {
                 "source": {"search_queries": [], "packages": ["demo-ai"]},
                 "fetch": {"search_size": 1, "window_days": 7, "limit": 1},
                 "filters": {"min_weekly_downloads": 1, "skip_prerelease": True},

@@ -16,18 +16,24 @@ class OctpSupabaseConfigTest(unittest.TestCase):
             "source_type": "NEWS",
             "sub_source_type": "hackernews",
             "item_type": "article",
-            "input": {"new_n": 500, "min_score": 50},
+            "input": {
+                "source": {"feed": "newstories"},
+                "fetch": {"new_n": 500},
+                "filters": {"min_score": 50},
+                "enrich": [],
+                "runtime": {},
+            },
         }
 
         config = runtime_config_from_row(row)
 
         self.assertEqual(config["id"], row["id"])
-        self.assertEqual(config["type"], "hackernews")
+        self.assertEqual(config["scraper"], "hackernews")
         self.assertEqual(config["name"], "HackerNews")
         self.assertEqual(config["source_type"], "NEWS")
         self.assertEqual(config["sub_source_type"], "hackernews")
         self.assertEqual(config["item_type"], "article")
-        self.assertEqual(config["config"], {"new_n": 500, "min_score": 50})
+        self.assertEqual(config["input"], row["input"])
 
     def test_runtime_config_from_row_accepts_json_string_input(self) -> None:
         config = runtime_config_from_row(
@@ -37,16 +43,16 @@ class OctpSupabaseConfigTest(unittest.TestCase):
                 "source_type": "WEBSITE",
                 "sub_source_type": "openai_blog",
                 "item_type": "article",
-                "input": '{"max_items": 5}',
+                "input": '{"source":{"url":"https://example.com/feed.xml"},"fetch":{"max_items":5},"filters":{},"enrich":[],"runtime":{}}',
             }
         )
 
-        self.assertEqual(config["config"], {"max_items": 5})
+        self.assertEqual(config["input"]["fetch"], {"max_items": 5})
 
     def test_split_supported_configs_keeps_unsupported_separate(self) -> None:
         configs = [
-            {"name": "GitHub Trending", "type": "github_trending"},
-            {"name": "Legacy Twitter", "type": "twitter_nitter"},
+            {"name": "GitHub Trending", "scraper": "github_trending"},
+            {"name": "Legacy Twitter", "scraper": "twitter_nitter"},
         ]
 
         runnable, skipped = split_supported_configs(configs, {"github_trending"})
