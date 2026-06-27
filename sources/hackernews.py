@@ -8,7 +8,8 @@ from datetime import datetime, timezone, timedelta
 
 from core.contracts import ChannelSpec, RawItem, RunContext, ScraperConfig, SourceAdapterBase, SourceRecord, enrich_enabled
 from core.registry import register_adapter
-from infra.http import http_get
+from infra.gateways.http_transport import http_get
+from infra.gateways.jina_reader import fetch_jina_text
 
 from .spec_helpers import INTEGER, STRING, STRING_ARRAY, default_input, input_schema
 
@@ -31,12 +32,17 @@ except ImportError:
     HAS_TRAFILATURA = False
 
 
-def _fetch_body(url: str, skip_domains: list[str]) -> str:
-    if not HAS_TRAFILATURA:
-        return ""
+def _fetch_body(url: str, skip_domains: list[str], provider: str = "trafilatura") -> str:
     if any(domain in url for domain in skip_domains):
         return ""
     if "news.ycombinator.com" in url:
+        return ""
+    if provider == "jina":
+        try:
+            return fetch_jina_text(url, timeout=10)
+        except Exception:
+            return ""
+    if not HAS_TRAFILATURA:
         return ""
     try:
         response = http_get(url, timeout=10, headers=HEADERS)
@@ -115,6 +121,7 @@ class HackerNewsAdapter(SourceAdapterBase):
                 "skip_domains": STRING_ARRAY,
                 "max_comments_to_fetch": INTEGER,
                 "max_comments_to_keep": INTEGER,
+                "article_body_provider": STRING,
             },
             filters={"min_score": INTEGER},
             enrich_names=["article_body", "top_comments"],
@@ -128,6 +135,7 @@ class HackerNewsAdapter(SourceAdapterBase):
                 "skip_domains": ["twitter.com", "x.com", "medium.com", "zhihu.com"],
                 "max_comments_to_fetch": 30,
                 "max_comments_to_keep": 10,
+                "article_body_provider": "trafilatura",
             },
             filters={"min_score": 50},
             enrich=[
@@ -169,6 +177,9 @@ class HackerNewsAdapter(SourceAdapterBase):
         skip_domains = [str(item) for item in fetch.get("skip_domains", ["twitter.com", "x.com", "medium.com", "zhihu.com"])]
         max_comments_to_fetch = int(fetch.get("max_comments_to_fetch") or 30)
         max_comments_to_keep = int(fetch.get("max_comments_to_keep") or 10)
+        article_body_provider = str(fetch.get("article_body_provider") or "trafilatura").lower()
+        if article_body_provider not in {"jina", "trafilatura"}:
+            article_body_provider = "trafilatura"
         fetch_article_body = enrich_enabled(config, "article_body")
         fetch_top_comments = enrich_enabled(config, "top_comments")
         if not fetch_article_body and not fetch_top_comments:
@@ -176,7 +187,7 @@ class HackerNewsAdapter(SourceAdapterBase):
 
         def enrich_one(record: SourceRecord) -> tuple[SourceRecord, str, list[dict]]:
             story_id = record.metrics.get("hn_id")
-            article_body = _fetch_body(record.url, skip_domains) if fetch_article_body else ""
+            article_body = _fetch_body(record.url, skip_domains, article_body_provider) if fetch_article_body else ""
             comments = (
                 _fetch_top_comments(int(story_id), max_comments_to_fetch, max_comments_to_keep)
                 if fetch_top_comments and story_id
@@ -193,6 +204,7 @@ class HackerNewsAdapter(SourceAdapterBase):
                     continue
                 if body:
                     record.context_content["original_content"] = body[:8000]
+                    record.context_content["original_content_source"] = article_body_provider
                     record.content = body
                 if comments:
                     record.context_content["top_comments"] = comments

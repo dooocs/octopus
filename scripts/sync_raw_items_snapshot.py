@@ -7,7 +7,7 @@ from collections.abc import Iterable, Iterator
 from datetime import date, datetime
 from typing import Any
 
-from infra.http import http_delete, http_post
+from infra.gateways.http_transport import http_delete, http_post
 try:
     from dotenv import load_dotenv
 except ImportError:  # pragma: no cover

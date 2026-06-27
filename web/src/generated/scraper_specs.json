@@ -56,6 +56,9 @@
             },
             "max_content_chars": {
               "type": "integer"
+            },
+            "full_text_provider": {
+              "type": "string"
             }
           }
         },
@@ -98,7 +101,8 @@
         "fetch_window_hours": 0,
         "fetch_full_text": true,
         "full_text_timeout": 15,
-        "max_content_chars": 12000
+        "max_content_chars": 12000,
+        "full_text_provider": "trafilatura"
       },
       "filters": {},
       "enrich": [
@@ -860,6 +864,9 @@
             },
             "max_comments_to_keep": {
               "type": "integer"
+            },
+            "article_body_provider": {
+              "type": "string"
             }
           }
         },
@@ -911,7 +918,8 @@
           "zhihu.com"
         ],
         "max_comments_to_fetch": 30,
-        "max_comments_to_keep": 10
+        "max_comments_to_keep": 10,
+        "article_body_provider": "trafilatura"
       },
       "filters": {
         "min_score": 50
@@ -1873,6 +1881,9 @@
             },
             "max_content_chars": {
               "type": "integer"
+            },
+            "full_text_provider": {
+              "type": "string"
             }
           }
         },
@@ -1913,7 +1924,8 @@
         "fetch_window_hours": 25,
         "fetch_full_text": true,
         "full_text_timeout": 15,
-        "max_content_chars": 12000
+        "max_content_chars": 12000,
+        "full_text_provider": "trafilatura"
       },
       "filters": {},
       "enrich": [

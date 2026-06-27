@@ -8,7 +8,7 @@ import requests
 
 from core.contracts import ChannelSpec, RawItem, RunContext, ScraperConfig, SourceAdapterBase, SourceRecord, enrich_enabled
 from core.registry import register_adapter
-from infra.http import http_post
+from infra.gateways.http_transport import http_post
 
 from .spec_helpers import INTEGER, STRING, default_input, input_schema
 

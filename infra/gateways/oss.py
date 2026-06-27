@@ -1,5 +1,4 @@
-# infra/oss.py
-# Alibaba Cloud OSS image upload utility
+# Alibaba Cloud OSS image upload gateway.
 
 from __future__ import annotations
 
@@ -9,8 +8,7 @@ import time
 from datetime import date
 from urllib.parse import urlparse
 
-import requests
-from infra.http import http_get
+from infra.gateways.http_transport import http_get
 
 OSS_ENDPOINT = "oss-cn-hangzhou.aliyuncs.com"
 OSS_BUCKET = "amazingindex"
@@ -49,12 +47,13 @@ def _get_bucket():
 
     try:
         import oss2
+
         auth = oss2.Auth(key_id, key_secret)
         _oss_bucket = oss2.Bucket(auth, endpoint, bucket_name)
         _oss_enabled = True
         return _oss_bucket
     except Exception as e:
-        print(f"⚠️ OSS 初始化失败: {e}")
+        print(f"OSS init failed: {e}")
         _oss_enabled = False
         return None
 
@@ -96,16 +95,22 @@ def upload_image_to_oss(url: str, date_str: str | None = None) -> str | None:
     try:
         resp = None
         for attempt in range(3):
-            resp = http_get(url, timeout=DOWNLOAD_TIMEOUT, stream=True, headers={
-                "User-Agent": "Mozilla/5.0 (compatible; ImageFetcher/1.0)",
-            })
+            resp = http_get(
+                url,
+                timeout=DOWNLOAD_TIMEOUT,
+                stream=True,
+                headers={
+                    "User-Agent": "Mozilla/5.0 (compatible; ImageFetcher/1.0)",
+                },
+            )
             if resp.status_code == 200:
                 break
             if attempt < 2:
-                print(f"  ⏳ 图片下载 {resp.status_code}，3s 后重试 ({attempt + 1}/2): {url[:60]}")
+                print(f"  Image download {resp.status_code}, retrying in 3s ({attempt + 1}/2): {url[:60]}")
                 time.sleep(3)
         if resp is None or resp.status_code != 200:
-            print(f"  ⚠️ 图片下载失败 [{resp.status_code}]: {url[:80]}")
+            status = resp.status_code if resp is not None else "empty"
+            print(f"  Image download failed [{status}]: {url[:80]}")
             return None
 
         mime_type = resp.headers.get("Content-Type", "")
@@ -117,16 +122,18 @@ def upload_image_to_oss(url: str, date_str: str | None = None) -> str | None:
         ext = _guess_ext(url, mime_type)
         oss_key = _build_oss_key(url, ext, date_str)
 
-        bucket.put_object(oss_key, image_data, headers={
-            "Content-Type": mime_type or "application/octet-stream",
-        })
+        bucket.put_object(
+            oss_key,
+            image_data,
+            headers={
+                "Content-Type": mime_type or "application/octet-stream",
+            },
+        )
 
-        public_url = f"https://{OSS_CUSTOM_DOMAIN}/{oss_key}"
-
-        return public_url
+        return f"https://{OSS_CUSTOM_DOMAIN}/{oss_key}"
 
     except Exception as e:
-        print(f"  ⚠️ OSS 上传失败: {url[:80]} | {e}")
+        print(f"  OSS upload failed: {url[:80]} | {e}")
         return None
 
 

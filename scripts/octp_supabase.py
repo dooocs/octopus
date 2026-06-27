@@ -4,7 +4,7 @@ import json
 import os
 from typing import Any, Iterable
 
-from infra.http import http_get, http_patch, http_post
+from infra.gateways.http_transport import http_get, http_patch, http_post
 
 CONFIG_TABLE = "octp_scraper_configs"
 LOG_TABLE = "octp_scraper_logs"
