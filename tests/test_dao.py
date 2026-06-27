@@ -5,6 +5,7 @@ import unittest
 from datetime import date, datetime, timezone
 from typing import Any, Iterable, Sequence
 
+from core.contracts import raw_item_id_from_url
 from infra.dao import RawItemRecord, RawItemsDao
 from infra.models import RawItem
 
@@ -41,6 +42,7 @@ class RawItemsDaoTest(unittest.TestCase):
 
         record = RawItemRecord.from_crawler_item(item)
 
+        self.assertEqual(record.id, raw_item_id_from_url("https://example.com/demo"))
         self.assertEqual(record.url, "https://example.com/demo")
         self.assertEqual(record.sub_source_type, "example_rss")
         self.assertEqual(record.item_type, "article")

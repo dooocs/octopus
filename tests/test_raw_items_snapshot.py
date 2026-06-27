@@ -4,6 +4,7 @@ import unittest
 from datetime import date, datetime
 from unittest.mock import Mock, patch
 
+from core.contracts import raw_item_id_from_url
 from scripts.sync_raw_items_snapshot import (
     SNAPSHOT_TABLE,
     SupabaseSnapshotClient,
@@ -41,6 +42,7 @@ class RawItemsSnapshotSyncTest(unittest.TestCase):
 
         normalized = normalize_raw_item_row(row)
 
+        self.assertEqual(normalized["id"], raw_item_id_from_url("https://example.com/item"))
         self.assertEqual(normalized["created_date"], "2026-06-13T01:02:03.123000")
         self.assertEqual(normalized["snapshot_date"], "2026-06-13")
         self.assertEqual(normalized["metrics"], {"views": 10})

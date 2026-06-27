@@ -13,6 +13,10 @@ def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def raw_item_id_from_url(original_url: str) -> str:
+    return hashlib.md5(original_url.encode()).hexdigest()
+
+
 def _as_iso(value: datetime | date | str | None) -> str | None:
     if value is None:
         return None
@@ -236,8 +240,7 @@ class RawItem:
 
     @property
     def id(self) -> str:
-        identity = f"{self.source_type}:{self.sub_source_type}:{self.identity or self.original_url}"
-        return hashlib.md5(identity.encode()).hexdigest()
+        return raw_item_id_from_url(self.original_url)
 
     def to_output_dict(self) -> dict[str, Any]:
         now = _utc_now_iso()

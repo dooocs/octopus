@@ -7,7 +7,16 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
-from core.contracts import ChannelSpec, InputConfig, RawItem, RunContext, ScraperConfig, SourceAdapterBase, SourceRecord
+from core.contracts import (
+    ChannelSpec,
+    InputConfig,
+    RawItem,
+    RunContext,
+    ScraperConfig,
+    SourceAdapterBase,
+    SourceRecord,
+    raw_item_id_from_url,
+)
 from core.registry import export_specs, register_adapter
 from core.runner import run_config
 from pipeline.sinks import JsonlSink
@@ -37,7 +46,7 @@ class InputConfigContractTest(unittest.TestCase):
 
 
 class RawItemContractTest(unittest.TestCase):
-    def test_raw_item_id_prefers_native_identity(self) -> None:
+    def test_raw_item_id_uses_original_url(self) -> None:
         first = RawItem(
             title="Demo",
             original_url="https://example.com/a",
@@ -46,7 +55,15 @@ class RawItemContractTest(unittest.TestCase):
             scraper_slug="example",
             identity="native-1",
         )
-        second = RawItem(
+        same_url_other_identity = RawItem(
+            title="Demo",
+            original_url="https://example.com/a",
+            source_type="website",
+            item_type="article",
+            scraper_slug="example",
+            identity="native-2",
+        )
+        different_url_same_identity = RawItem(
             title="Demo",
             original_url="https://example.com/b",
             source_type="website",
@@ -55,7 +72,9 @@ class RawItemContractTest(unittest.TestCase):
             identity="native-1",
         )
 
-        self.assertEqual(first.id, second.id)
+        self.assertEqual(first.id, raw_item_id_from_url("https://example.com/a"))
+        self.assertEqual(first.id, same_url_other_identity.id)
+        self.assertNotEqual(first.id, different_url_same_identity.id)
         self.assertEqual(first.to_output_dict()["extra"], {"native_id": "native-1"})
 
 

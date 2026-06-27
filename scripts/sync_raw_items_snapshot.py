@@ -7,6 +7,7 @@ from collections.abc import Iterable, Iterator
 from datetime import date, datetime
 from typing import Any
 
+from core.contracts import raw_item_id_from_url
 from infra.gateways.http_transport import http_delete, http_post
 try:
     from dotenv import load_dotenv
@@ -51,6 +52,12 @@ def _json_ready(value: Any) -> Any:
     return value
 
 
+def _snapshot_id_from_url(value: Any) -> str:
+    if not isinstance(value, str) or not value:
+        raise ValueError("url is required to build octp_snapshot_raw_items id")
+    return raw_item_id_from_url(value)
+
+
 def normalize_raw_item_row(row: dict[str, Any]) -> dict[str, Any]:
     normalized: dict[str, Any] = {}
     for column in RawItemsDao.COLUMNS:
@@ -59,6 +66,7 @@ def normalize_raw_item_row(row: dict[str, Any]) -> dict[str, Any]:
             normalized[column] = _json_value(value, field_name=column)
         else:
             normalized[column] = _json_ready(value)
+    normalized["id"] = _snapshot_id_from_url(normalized.get("url"))
     return normalized
 
 

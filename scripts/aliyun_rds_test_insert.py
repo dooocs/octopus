@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import os
 from datetime import datetime, timezone
 
@@ -10,17 +9,17 @@ except ImportError:  # pragma: no cover
     def load_dotenv() -> None:
         return None
 
+from core.contracts import raw_item_id_from_url
 from infra.dao import OctopusDao, RawItemRecord
 
 
-def _smoke_id() -> str:
-    identity = "octopus:aliyun_rds_test:raw_items"
-    return hashlib.md5(identity.encode()).hexdigest()
+def _smoke_id(url: str) -> str:
+    return raw_item_id_from_url(url)
 
 
 def _run_url() -> str:
     server_url = os.getenv("GITHUB_SERVER_URL", "https://github.com")
-    repository = os.getenv("GITHUB_REPOSITORY", "walihome/octopus")
+    repository = os.getenv("GITHUB_REPOSITORY", "dooocs/octopus")
     run_id = os.getenv("GITHUB_RUN_ID", "local")
     return f"{server_url}/{repository}/actions/runs/{run_id}"
 
@@ -29,10 +28,11 @@ def build_record() -> RawItemRecord:
     now = datetime.now(timezone.utc).replace(tzinfo=None)
     run_id = os.getenv("GITHUB_RUN_ID", "local")
     run_attempt = os.getenv("GITHUB_RUN_ATTEMPT", "1")
+    run_url = _run_url()
 
     return RawItemRecord(
-        id=_smoke_id(),
-        url=_run_url(),
+        id=_smoke_id(run_url),
+        url=run_url,
         source_type="system",
         sub_source_type="aliyun_rds_test",
         item_type="smoke_test",
