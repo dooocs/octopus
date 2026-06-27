@@ -106,7 +106,7 @@ class EnrichPhaseBoundaryTest(unittest.TestCase):
             "item_type": "article",
             "input": {
                 "source": {"feed": "hottest", "tags": []},
-                "fetch": {"window_days": 7, "limit": 1, "comments_to_keep": 10},
+                "fetch": {"window_days": 3650, "limit": 1, "comments_to_keep": 10},
                 "filters": {"min_score": 0, "min_comments": 0, "tag_whitelist": [], "tag_blacklist": []},
                 "enrich": [{"name": "top_comments", "when": "always"}],
             },
@@ -192,6 +192,61 @@ class HackerNewsEnrichmentTest(unittest.TestCase):
         self.assertEqual(row["context_content"]["original_content"], "Original article body")
         self.assertEqual([c["author"] for c in row["context_content"]["top_comments"]], ["bob", "carol"])
 
+    def test_hackernews_can_fetch_article_body_through_jina_provider(self) -> None:
+        now_ts = int(time.time())
+
+        def fake_get(url: str, **kwargs: object) -> _FakeResponse:
+            if url.endswith("/newstories.json"):
+                return _FakeResponse([100])
+            if url.endswith("/item/100.json"):
+                return _FakeResponse(
+                    {
+                        "id": 100,
+                        "type": "story",
+                        "title": "HN story",
+                        "url": "https://example.com/article",
+                        "text": "<p>HN post body</p>",
+                        "by": "alice",
+                        "time": now_ts,
+                        "score": 123,
+                        "descendants": 0,
+                    }
+                )
+            return _FakeResponse({})
+
+        config = {
+            "scraper": "hackernews",
+            "name": "HN",
+            "enabled": True,
+            "source_type": "NEWS",
+            "sub_source_type": "hackernews",
+            "item_type": "article",
+            "input": {
+                "source": {"feed": "newstories"},
+                "fetch": {
+                    "new_n": 1,
+                    "cutoff_hours": 999999,
+                    "fetch_workers": 1,
+                    "skip_domains": [],
+                    "max_comments_to_fetch": 0,
+                    "max_comments_to_keep": 0,
+                    "article_body_provider": "jina",
+                },
+                "filters": {"min_score": 1},
+                "enrich": [{"name": "article_body", "when": "has_external_url"}],
+            },
+        }
+
+        with patch("sources.hackernews.http_get", side_effect=fake_get), patch(
+            "sources.hackernews.fetch_jina_text",
+            return_value="Jina HN article",
+        ) as fetch_jina_text:
+            result = run_config(config, "2026-06-20")
+
+        self.assertEqual(result.rows[0]["content"], "Jina HN article")
+        self.assertEqual(result.rows[0]["context_content"]["original_content_source"], "jina")
+        fetch_jina_text.assert_called_once_with("https://example.com/article", timeout=10)
+
 
 class FeedFullTextEnrichmentTest(unittest.TestCase):
     def test_rss_full_text_overrides_feed_summary_and_preserves_summary_context(self) -> None:
@@ -237,6 +292,50 @@ class FeedFullTextEnrichmentTest(unittest.TestCase):
         self.assertEqual(result.rows[0]["context_content"]["feed_summary"], "Feed summary")
         self.assertTrue(result.rows[0]["context_content"]["full_text_fetched"])
 
+    def test_rss_can_fetch_full_text_through_jina_provider(self) -> None:
+        rss_text = """<?xml version="1.0" encoding="UTF-8" ?>
+<rss version="2.0">
+  <channel>
+    <item>
+      <title>Demo article</title>
+      <link>https://example.com/article</link>
+      <description>Feed summary</description>
+    </item>
+  </channel>
+</rss>
+"""
+        config = {
+            "scraper": "rss",
+            "name": "Feed",
+            "enabled": True,
+            "source_type": "ARTICLE",
+            "sub_source_type": "feed",
+            "item_type": "article",
+            "input": {
+                "source": {"url": "https://example.com/feed.xml"},
+                "fetch": {
+                    "max_items": 1,
+                    "fetch_window_hours": 999999,
+                    "fetch_full_text": True,
+                    "full_text_timeout": 5,
+                    "max_content_chars": 12000,
+                    "full_text_provider": "jina",
+                },
+                "filters": {},
+                "enrich": [{"name": "full_text", "when": "always"}],
+            },
+        }
+
+        with patch("sources.rss.http_get", return_value=_FakeResponse(text=rss_text)), patch(
+            "sources.rss.fetch_jina_text",
+            return_value="Jina article text",
+        ) as fetch_jina_text:
+            result = run_config(config, "2026-06-20")
+
+        self.assertEqual(result.rows[0]["content"], "Jina article text")
+        self.assertEqual(result.rows[0]["context_content"]["full_text_source"], "jina")
+        fetch_jina_text.assert_called_once_with("https://example.com/article", timeout=5)
+
 
 class AIBlogFullTextEnrichmentTest(unittest.TestCase):
     def test_ai_blog_fetches_full_article_text_from_list_page(self) -> None:
@@ -269,6 +368,43 @@ class AIBlogFullTextEnrichmentTest(unittest.TestCase):
         self.assertEqual(result.rows[0]["content"], "Full blog article")
         self.assertEqual(result.rows[0]["context_content"]["list_summary"], "List summary")
         self.assertTrue(result.rows[0]["context_content"]["full_text_fetched"])
+
+    def test_ai_blog_can_fetch_full_text_through_jina_provider(self) -> None:
+        list_html = """
+<html><body>
+  <a href="/news/demo"><h2>Demo news</h2><p>List summary</p><time datetime="2026-06-20T00:00:00Z"></time></a>
+</body></html>
+"""
+        config = {
+            "scraper": "ai_blog",
+            "name": "AI Blog",
+            "enabled": True,
+            "source_type": "website",
+            "sub_source_type": "ai_blog",
+            "item_type": "article",
+            "input": {
+                "source": {"base_url": "https://example.com", "news_url": "https://example.com/news", "link_selector": "a"},
+                "fetch": {
+                    "fetch_window_hours": 999999,
+                    "fetch_full_text": True,
+                    "full_text_timeout": 5,
+                    "max_content_chars": 12000,
+                    "full_text_provider": "jina",
+                },
+                "filters": {},
+                "enrich": [{"name": "full_text", "when": "always"}],
+            },
+        }
+
+        with patch("sources.ai_blog.http_get", return_value=_FakeResponse(text=list_html)), patch(
+            "sources.ai_blog.fetch_jina_text",
+            return_value="Jina blog article",
+        ) as fetch_jina_text:
+            result = run_config(config, "2026-06-20")
+
+        self.assertEqual(result.rows[0]["content"], "Jina blog article")
+        self.assertEqual(result.rows[0]["context_content"]["full_text_source"], "jina")
+        fetch_jina_text.assert_called_once_with("https://example.com/news/demo", timeout=5)
 
 
 class V2EXEnrichmentTest(unittest.TestCase):
@@ -658,7 +794,7 @@ class GitHubReleasesEnrichmentTest(unittest.TestCase):
             "item_type": "release",
             "input": {
                 "source": {"repositories": ["org/repo"]},
-                "fetch": {"releases_per_repo": 1, "window_days": 7, "limit": 1, "sort_by": "asset_downloads"},
+                "fetch": {"releases_per_repo": 1, "window_days": 3650, "limit": 1, "sort_by": "asset_downloads"},
                 "filters": {"skip_prerelease": True, "min_asset_downloads": 0},
                 "enrich": [],
             },
@@ -710,7 +846,7 @@ class PyPIDownloadsEnrichmentTest(unittest.TestCase):
             "item_type": "package_release",
             "input": {
                 "source": {"packages": ["demo"]},
-                "fetch": {"window_days": 7, "limit": 1, "fetch_downloads": True},
+                "fetch": {"window_days": 3650, "limit": 1, "fetch_downloads": True},
                 "filters": {"skip_prerelease": True, "skip_yanked": True},
                 "enrich": [],
             },
@@ -762,7 +898,7 @@ class LobstersEnrichmentTest(unittest.TestCase):
             "item_type": "article",
             "input": {
                 "source": {"feed": "hottest", "tags": []},
-                "fetch": {"window_days": 7, "limit": 1, "comments_to_keep": 10},
+                "fetch": {"window_days": 3650, "limit": 1, "comments_to_keep": 10},
                 "filters": {"min_score": 0, "min_comments": 0, "tag_whitelist": [], "tag_blacklist": []},
                 "enrich": [],
             },

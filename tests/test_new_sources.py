@@ -74,7 +74,7 @@ class LobstersAdapterTest(unittest.TestCase):
             "item_type": "article",
             "input": {
                 "source": {"feed": "hottest", "tags": []},
-                "fetch": {"window_days": 7, "limit": 1},
+                "fetch": {"window_days": 3650, "limit": 1},
                 "filters": {"min_score": 0, "min_comments": 0, "tag_whitelist": [], "tag_blacklist": []},
                 "enrich": [],
             },
@@ -122,7 +122,7 @@ class NpmPackageReleasesAdapterTest(unittest.TestCase):
             "item_type": "package_release",
             "input": {
                 "source": {"search_queries": [{"q": "keywords:ai", "label": "ai"}], "packages": []},
-                "fetch": {"search_size": 1, "window_days": 7, "limit": 1},
+                "fetch": {"search_size": 1, "window_days": 3650, "limit": 1},
                 "filters": {"min_weekly_downloads": 1000, "skip_prerelease": True},
                 "enrich": [],
             },
@@ -166,7 +166,7 @@ class NpmPackageReleasesAdapterTest(unittest.TestCase):
             "item_type": "package_release",
             "input": {
                 "source": {"search_queries": [], "packages": ["demo-ai"]},
-                "fetch": {"search_size": 1, "window_days": 7, "limit": 1},
+                "fetch": {"search_size": 1, "window_days": 3650, "limit": 1},
                 "filters": {"min_weekly_downloads": 100000, "skip_prerelease": True},
                 "enrich": [],
             },
@@ -236,7 +236,7 @@ class PyPIPackageReleasesPruneTest(unittest.TestCase):
             "item_type": "package_release",
             "input": {
                 "source": {"packages": ["oldpopular", "newquiet"]},
-                "fetch": {"window_days": 7, "limit": 1, "fetch_downloads": True},
+                "fetch": {"window_days": 3650, "limit": 1, "fetch_downloads": True},
                 "filters": {"skip_prerelease": True, "skip_yanked": True},
                 "enrich": [],
             },

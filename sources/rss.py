@@ -9,7 +9,8 @@ import feedparser
 
 from core.contracts import ChannelSpec, RawItem, RunContext, ScraperConfig, SourceAdapterBase, SourceRecord, enrich_enabled
 from core.registry import register_adapter
-from infra.http import http_get
+from infra.gateways.http_transport import http_get
+from infra.gateways.jina_reader import fetch_jina_text
 
 from .spec_helpers import BOOLEAN, INTEGER, JSON_OBJECT, STRING, default_input, input_schema
 
@@ -51,7 +52,13 @@ def _is_retweet(title: str) -> bool:
     return title.strip().startswith("RT by @")
 
 
-def _fetch_full_text(url: str, timeout: int, max_chars: int) -> str:
+def _fetch_full_text(url: str, timeout: int, max_chars: int, provider: str = "trafilatura") -> str:
+    if provider == "jina":
+        try:
+            return fetch_jina_text(url, timeout=timeout)[:max_chars]
+        except Exception:
+            return ""
+
     if not HAS_TRAFILATURA:
         return ""
     try:
@@ -82,6 +89,7 @@ class RSSAdapter(SourceAdapterBase):
                 "fetch_full_text": BOOLEAN,
                 "full_text_timeout": INTEGER,
                 "max_content_chars": INTEGER,
+                "full_text_provider": STRING,
             },
             enrich_names=["full_text"],
         ),
@@ -93,6 +101,7 @@ class RSSAdapter(SourceAdapterBase):
                 "fetch_full_text": True,
                 "full_text_timeout": 15,
                 "max_content_chars": 12000,
+                "full_text_provider": "trafilatura",
             },
             enrich=[{"name": "full_text", "when": "always"}],
         ),
@@ -155,10 +164,14 @@ class RSSAdapter(SourceAdapterBase):
             return records
         full_text_timeout = int(fetch.get("full_text_timeout") or 15)
         max_content_chars = int(fetch.get("max_content_chars") or 12000)
+        full_text_provider = str(fetch.get("full_text_provider") or "trafilatura").lower()
+        if full_text_provider not in {"jina", "trafilatura"}:
+            full_text_provider = "trafilatura"
         for record in records:
-            full_text = _fetch_full_text(record.url, full_text_timeout, max_content_chars)
+            full_text = _fetch_full_text(record.url, full_text_timeout, max_content_chars, full_text_provider)
             if full_text:
                 record.content = full_text[:max_content_chars]
+                record.context_content["full_text_source"] = full_text_provider
             record.context_content["full_text_fetched"] = bool(full_text)
         return records
 
