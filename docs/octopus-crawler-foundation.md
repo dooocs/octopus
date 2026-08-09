@@ -30,7 +30,7 @@ load configs
   -> enrich
   -> normalize
   -> validate output
-  -> sink
+  -> output
   -> update run/task/state
 ```
 
@@ -54,9 +54,9 @@ load configs
 | `enrich` | `enrich` | 仅对 prune 后记录补充正文、README、评论、图片等上下文，不再影响保留集。 |
 | `normalize` | 顶层配置 + adapter 代码 | 转换成统一 `RawItem`。 |
 | `validate output` | `RawItem` contract | 校验最终输出是否满足 `raw_items` 契约。 |
-| `sink` | runner/env/CLI | 写 JSONL、RDS、日志、状态；不属于单个 scraper 的 `input`。 |
+| `output` | runner/env/CLI | 写 JSONL、RDS、日志、状态；不属于单个 scraper 的 `input`。 |
 
-执行控制是横切能力，不属于业务 `input` 段。`sink` 是运行器能力，不进入 scraper 配置。
+执行控制是横切能力，不属于业务 `input` 段。输出目标是运行器能力，不进入 scraper 配置。当前运行态表里的阶段枚举仍保留 `sink` 作为兼容名称。
 
 ## 3. 配置契约
 
@@ -221,28 +221,31 @@ md5(source_type + ":" + sub_source_type + ":" + identity)
 
 ```text
 octopus/
-  core/
-    contracts.py
-    registry.py
-    runner.py
-    validation.py
+  crawler/
+    core/
+      contracts.py
+      registry.py
+      runner.py
+      validation.py
+    sources/
+      github.py
+      hackernews.py
+      rss.py
+      twitter.py
+      reddit.py
+      product_hunt.py
+      huggingface.py
+    outputs/
+      __init__.py
+    runtime/
+      global_scrape.py
   infra/
-    http.py
+    gateways/
+      http_transport.py
+      jina_reader.py
+      oss.py
     dao/
-    object_storage.py
-    secrets.py
-  sources/
-    github/
-    hackernews/
-    rss/
-    twitter/
-    reddit/
-    product_hunt/
-    huggingface/
-    community/
-  pipeline/
-    enrichers.py
-    sinks.py
+    supabase.py
   scripts/
     global_scrape.py
     export_scraper_specs.py
@@ -254,10 +257,12 @@ octopus/
 
 | 层 | 允许做什么 | 禁止做什么 |
 | --- | --- | --- |
-| `core` | 定义契约、注册、编排、校验、通用过滤。 | 写渠道 HTTP 细节、写 DB 细节。 |
+| `crawler/core` | 定义契约、注册、编排、校验、通用过滤。 | 写渠道 HTTP 细节、写 DB 细节。 |
+| `crawler/sources` | 渠道访问、解析、字段映射。 | 直接写 RDS、直接写 Supabase logs。 |
+| `crawler/outputs` | JSONL、RDS 等可配置输出目标。 | 决定抓什么、改变 adapter 输出契约。 |
+| `crawler/runtime` | 全局运行编排、运行态更新、输出目标选择。 | 进入单个来源解析细节。 |
 | `infra` | HTTP、DB、OSS、secret、外部服务基础能力。 | 了解业务 item_type 或具体来源语义。 |
-| `sources` | 渠道访问、解析、字段映射。 | 直接写 RDS、直接写 Supabase logs。 |
-| `pipeline` | enrich 和 sink 的可复用阶段。 | 内嵌具体渠道抓取入口。 |
+| `scripts` | CLI 入口和一次性工具。 | 承载可复用运行逻辑。 |
 | `web` | 管理配置和展示运行态。 | 手写渠道 schema 源。 |
 
 ## 6. Adapter 与 ChannelSpec
@@ -415,18 +420,18 @@ updated_date
 
 | 当前 scraper | 目标 adapter | 关键迁移点 |
 | --- | --- | --- |
-| `rss` | `sources/rss` | `url` 进入 `source`，窗口和数量进入 `fetch`。 |
-| `ai_blog` | `sources/website_blog` | selector 进入 `source`，窗口进入 `fetch`。 |
-| `github_trending` | `sources/github` | README、语言、图片、star history 进入 `enrich`。 |
-| `github_search` | `sources/github` | queries 进入 `source`，stars 过滤进入 `filters`。 |
-| `hackernews` | `sources/hackernews` | newstories 进入 `source`，score 进入 `filters`，正文进入 `enrich`。 |
-| `twitter_twscrape` | `sources/twitter` | accounts/keywords 进入 `source`，likes 进入 `filters`。 |
-| `community_v2ex` | `sources/community` | 热榜抓取进入 `discover`，回复补充进入 `enrich`。 |
-| `community_linuxdo` | `sources/community` | 热榜抓取进入 `discover`，回复补充进入 `enrich`。 |
-| `reddit` | `sources/reddit` | subreddit 进入 `source`，NSFW/score 进入 `filters`。 |
-| `hf_model` | `sources/huggingface` | downloads/likes 进入 `filters`。 |
-| `hf_papers` | `sources/huggingface` | top_n 进入 `fetch`。 |
-| `product_hunt` | `sources/product_hunt` | votes/topic 白黑名单进入 `filters`。 |
+| `rss` | `crawler/sources/rss` | `url` 进入 `source`，窗口和数量进入 `fetch`。 |
+| `ai_blog` | `crawler/sources/website_blog` | selector 进入 `source`，窗口进入 `fetch`。 |
+| `github_trending` | `crawler/sources/github` | README、语言、图片、star history 进入 `enrich`。 |
+| `github_search` | `crawler/sources/github` | queries 进入 `source`，stars 过滤进入 `filters`。 |
+| `hackernews` | `crawler/sources/hackernews` | newstories 进入 `source`，score 进入 `filters`，正文进入 `enrich`。 |
+| `twitter_twscrape` | `crawler/sources/twitter` | accounts/keywords 进入 `source`，likes 进入 `filters`。 |
+| `community_v2ex` | `crawler/sources/community` | 热榜抓取进入 `discover`，回复补充进入 `enrich`。 |
+| `community_linuxdo` | `crawler/sources/community` | 热榜抓取进入 `discover`，回复补充进入 `enrich`。 |
+| `reddit` | `crawler/sources/reddit` | subreddit 进入 `source`，NSFW/score 进入 `filters`。 |
+| `hf_model` | `crawler/sources/huggingface` | downloads/likes 进入 `filters`。 |
+| `hf_papers` | `crawler/sources/huggingface` | top_n 进入 `fetch`。 |
+| `product_hunt` | `crawler/sources/product_hunt` | votes/topic 白黑名单进入 `filters`。 |
 
 如果某个 UI 渠道没有对应 adapter，例如旧 `twitter_nitter`，不得进入新 spec；要么补齐 adapter，要么从 UI 和配置迁移中移除。
 
@@ -435,7 +440,7 @@ updated_date
 本次采用强迁移：
 
 1. 新增 `input_schema_version`、run/task/state 表。
-2. 引入 `core` 契约、adapter registry、ChannelSpec。
+2. 引入 `crawler/core` 契约、adapter registry、ChannelSpec。
 3. 写配置迁移脚本，把所有现有 flat input 一次性转换为四段式 input。
 4. 迁移所有现有 scraper 到新 adapter 接口。
 5. runner 不保留旧 flat input 运行兼容。
@@ -470,7 +475,7 @@ unsupported scraper configs
 建议验证命令：
 
 ```bash
-python -m compileall core infra pipeline sources scripts tests
+python -m compileall crawler infra scripts tests
 python -m unittest discover tests
 cd web && npm run build
 ```

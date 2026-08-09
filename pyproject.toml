@@ -29,4 +29,4 @@ octopus-migrate-scraper-configs-v1 = "scripts.migrate_scraper_configs_v1:main"
 octopus-sync-raw-items-snapshot = "scripts.sync_raw_items_snapshot:main"
 
 [tool.setuptools.packages.find]
-include = ["core*", "infra*", "pipeline*", "scripts*", "sources*"]
+include = ["crawler*", "infra*", "scripts*"]

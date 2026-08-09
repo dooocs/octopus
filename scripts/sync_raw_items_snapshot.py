@@ -7,7 +7,7 @@ from collections.abc import Iterable, Iterator
 from datetime import date, datetime
 from typing import Any
 
-from core.contracts import raw_item_id_from_url
+from crawler.core.contracts import raw_item_id_from_url
 from infra.gateways.http_transport import http_delete, http_post
 try:
     from dotenv import load_dotenv

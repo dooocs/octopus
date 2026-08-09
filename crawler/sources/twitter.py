@@ -9,8 +9,8 @@ from email.utils import parsedate_to_datetime
 import httpx
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
-from core.contracts import ChannelSpec, RawItem, RunContext, ScraperConfig, SourceAdapterBase, SourceRecord
-from core.registry import register_adapter
+from crawler.core.contracts import ChannelSpec, RawItem, RunContext, ScraperConfig, SourceAdapterBase, SourceRecord
+from crawler.core.registry import register_adapter
 
 from .spec_helpers import INTEGER, STRING_ARRAY, default_input, input_schema
 

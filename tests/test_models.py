@@ -3,8 +3,8 @@ from __future__ import annotations
 import unittest
 from datetime import datetime, timezone
 
-from core.contracts import raw_item_id_from_url
-from infra.models import RawItem
+from crawler.core.contracts import raw_item_id_from_url
+from crawler.core.contracts import RawItem
 
 
 class RawItemOutputContractTest(unittest.TestCase):

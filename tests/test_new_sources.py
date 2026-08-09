@@ -3,8 +3,8 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
-from core.registry import export_specs
-from core.runner import run_config
+from crawler.core.registry import export_specs
+from crawler.core.runner import run_config
 
 
 class _FakeResponse:
@@ -80,7 +80,7 @@ class LobstersAdapterTest(unittest.TestCase):
             },
         }
 
-        with patch("sources.lobsters.http_get", return_value=_FakeResponse(payload)):
+        with patch("crawler.sources.lobsters.http_get", return_value=_FakeResponse(payload)):
             result = run_config(config, "2026-06-20")
 
         self.assertEqual(len(result.rows), 1)
@@ -128,7 +128,7 @@ class NpmPackageReleasesAdapterTest(unittest.TestCase):
             },
         }
 
-        with patch("sources.package_releases.http_get", return_value=_FakeResponse(payload)):
+        with patch("crawler.sources.package_releases.http_get", return_value=_FakeResponse(payload)):
             result = run_config(config, "2026-06-20")
 
         self.assertEqual(len(result.rows), 1)
@@ -172,7 +172,7 @@ class NpmPackageReleasesAdapterTest(unittest.TestCase):
             },
         }
 
-        with patch("sources.package_releases.http_get", side_effect=fake_get):
+        with patch("crawler.sources.package_releases.http_get", side_effect=fake_get):
             result = run_config(config, "2026-06-20")
 
         row = result.rows[0]
@@ -242,7 +242,7 @@ class PyPIPackageReleasesPruneTest(unittest.TestCase):
             },
         }
 
-        with patch("sources.package_releases.http_get", side_effect=fake_get):
+        with patch("crawler.sources.package_releases.http_get", side_effect=fake_get):
             result = run_config(config, "2026-06-20")
 
         self.assertEqual(len(result.rows), 1)

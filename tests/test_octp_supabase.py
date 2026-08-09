@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from scripts.octp_supabase import runtime_config_from_row, split_supported_configs
+from infra.supabase import runtime_config_from_row, split_supported_configs
 
 
 class OctpSupabaseConfigTest(unittest.TestCase):

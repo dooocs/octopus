@@ -5,9 +5,9 @@ import unittest
 from datetime import date, datetime, timezone
 from typing import Any, Iterable, Sequence
 
-from core.contracts import raw_item_id_from_url
+from crawler.core.contracts import raw_item_id_from_url
 from infra.dao import RawItemRecord, RawItemsDao
-from infra.models import RawItem
+from crawler.core.contracts import RawItem
 
 
 class FakeDb:

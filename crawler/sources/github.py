@@ -6,8 +6,8 @@ from datetime import datetime, timedelta
 
 from bs4 import BeautifulSoup
 
-from core.contracts import ChannelSpec, RawItem, RunContext, ScraperConfig, SourceAdapterBase, SourceRecord, enrich_enabled
-from core.registry import register_adapter
+from crawler.core.contracts import ChannelSpec, RawItem, RunContext, ScraperConfig, SourceAdapterBase, SourceRecord, enrich_enabled
+from crawler.core.registry import register_adapter
 from infra.gateways.http_transport import http_get
 from infra.gateways.oss import upload_image_to_oss, upload_images_to_oss
 

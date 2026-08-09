@@ -1,6 +1,6 @@
 # Octopus Native Five-Part Refactor Plan
 
-本文档记录当前强迁移后的目标和验收口径：运行入口只接受五段式 `input`，所有来源都通过 `sources/*` adapter 执行，不再保留 legacy flat engine 兼容层。
+本文档是历史迁移记录。当前代码已经收敛到四段式 `input`，所有来源都通过 `crawler/sources/*` adapter 执行，不再保留 legacy flat engine 兼容层。
 
 ## 1. 当前状态
 
@@ -8,11 +8,11 @@
 
 - 运行配置只接受顶层 `scraper` + `input`。
 - `input` 必须包含且只包含五个一级 key：`source`、`fetch`、`filters`、`enrich`、`runtime`。
-- `core.runner` 执行链路为 `discover -> enrich -> select -> normalize`。
-- `sources/*` adapter 直接读取 `config.input.*`。
-- `sources/legacy.py`、`LegacyEngineAdapter`、`flat_config()`、旧 `scrapers/*Engine` 文件已经删除。
+- `crawler.core.runner` 执行链路为 `discover -> enrich -> select -> normalize`。
+- `crawler/sources/*` adapter 直接读取 `config.input.*`。
+- `crawler/sources/legacy.py`、`LegacyEngineAdapter`、`flat_config()`、旧 `scrapers/*Engine` 文件已经删除。
 - `RawItem` 只接受 `item_type`，不再接受 `content_type`。
-- `infra.models` 只导出 `RawItem`，不再提供 `BaseScraper` shim。
+- `RawItem` 从 `crawler.core.contracts` 导出，不再通过 `infra.models` shim。
 - Web admin specs 由 Python `ChannelSpec` 生成到 `web/src/generated/scraper_specs.json`。
 
 仍需单独处理：
@@ -98,11 +98,12 @@ Supabase `octp_scraper_configs` 的运行输入必须是：
 
 | 层 | 职责 |
 | --- | --- |
-| `core` | 契约、adapter registry、runner、校验。 |
-| `sources` | source-specific 请求、解析、enrich、select、normalize。 |
+| `crawler/core` | 契约、adapter registry、runner、校验。 |
+| `crawler/sources` | source-specific 请求、解析、enrich、select、normalize。 |
+| `crawler/outputs` | JSONL、RDS 等输出目标。 |
+| `crawler/runtime` | Action/CLI 运行编排和输出目标选择。 |
 | `infra` | HTTP、DAO、OSS、secret 等基础能力。 |
-| `pipeline` | sink 等跨来源流水线能力。 |
-| `scripts` | Action/CLI 入口、配置读取、spec 导出、一次性迁移工具。 |
+| `scripts` | CLI 入口、spec 导出、一次性迁移工具。 |
 | `web` | 管理配置和运行态，不手写 source schema。 |
 
 ## 6. 验收门禁
@@ -110,13 +111,13 @@ Supabase `octp_scraper_configs` 的运行输入必须是：
 运行时代码不应命中：
 
 ```bash
-rg -n 'LegacyEngineAdapter|flat_config|BaseScraper|row\.get\("config"|row\.get\("type"|from scrapers|import scrapers' core infra sources scripts tests
+rg -n 'LegacyEngineAdapter|flat_config|BaseScraper|row\.get\("config"|row\.get\("type"|from scrapers|import scrapers' crawler infra scripts tests
 ```
 
 `content_type` 不允许作为 `RawItem` 字段或 scraper 配置字段存在：
 
 ```bash
-rg -n 'content_type' core sources scripts tests
+rg -n 'content_type' crawler scripts tests
 ```
 
 必须通过：
@@ -124,7 +125,7 @@ rg -n 'content_type' core sources scripts tests
 ```bash
 python -m scripts.export_scraper_specs
 python scripts/export_scraper_specs.py
-python -m compileall core infra pipeline sources scripts tests
+python -m compileall crawler infra scripts tests
 python -m unittest discover tests
 cd web && npm run build
 ```
@@ -137,6 +138,6 @@ cd web && npm run build
 - runner 不接受旧 `type` / `config` 字段。
 - 运行时代码不存在 legacy flat bridge、`BaseScraper`、旧 `scrapers/*Engine`。
 - `RawItem` 只接受 `item_type`。
-- `core.runner` 执行 `discover -> enrich -> select -> normalize`。
+- `crawler.core.runner` 执行 `discover -> enrich -> select -> normalize`。
 - Python tests 和 web build 通过。
 - `Global Scrape` 在目标分支上真实跑通。
