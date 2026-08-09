@@ -4,9 +4,9 @@ import time
 import unittest
 from unittest.mock import patch
 
-from core.contracts import RunContext, ScraperConfig
-from core.registry import get_adapter
-from core.runner import run_config
+from crawler.core.contracts import RunContext, ScraperConfig
+from crawler.core.registry import get_adapter
+from crawler.core.runner import run_config
 
 
 class _FakeResponse:
@@ -54,8 +54,8 @@ class EnrichPhaseBoundaryTest(unittest.TestCase):
         config = ScraperConfig.from_mapping(config_row)
         ctx = RunContext(snapshot_date="2026-06-20")
 
-        with patch("sources.rss.http_get", return_value=_FakeResponse(text=rss_text)), patch(
-            "sources.rss._fetch_full_text",
+        with patch("crawler.sources.rss.http_get", return_value=_FakeResponse(text=rss_text)), patch(
+            "crawler.sources.rss._fetch_full_text",
             return_value="Full article text",
         ) as fetch_full_text:
             records = adapter.discover(ctx, config)
@@ -115,7 +115,7 @@ class EnrichPhaseBoundaryTest(unittest.TestCase):
         config = ScraperConfig.from_mapping(config_row)
         ctx = RunContext(snapshot_date="2026-06-20")
 
-        with patch("sources.lobsters.http_get", side_effect=fake_get):
+        with patch("crawler.sources.lobsters.http_get", side_effect=fake_get):
             records = adapter.discover(ctx, config)
             self.assertEqual(records[0].context_content["top_comments"], [])
             self.assertEqual(seen_urls, ["https://lobste.rs/hottest.json"])
@@ -179,8 +179,8 @@ class HackerNewsEnrichmentTest(unittest.TestCase):
             },
         }
 
-        with patch("sources.hackernews.http_get", side_effect=fake_get), patch(
-            "sources.hackernews.trafilatura.extract",
+        with patch("crawler.sources.hackernews.http_get", side_effect=fake_get), patch(
+            "crawler.sources.hackernews.trafilatura.extract",
             return_value="Original article body",
         ):
             result = run_config(config, "2026-06-20")
@@ -237,8 +237,8 @@ class HackerNewsEnrichmentTest(unittest.TestCase):
             },
         }
 
-        with patch("sources.hackernews.http_get", side_effect=fake_get), patch(
-            "sources.hackernews.fetch_jina_text",
+        with patch("crawler.sources.hackernews.http_get", side_effect=fake_get), patch(
+            "crawler.sources.hackernews.fetch_jina_text",
             return_value="Jina HN article",
         ) as fetch_jina_text:
             result = run_config(config, "2026-06-20")
@@ -282,8 +282,8 @@ class FeedFullTextEnrichmentTest(unittest.TestCase):
             },
         }
 
-        with patch("sources.rss.http_get", return_value=_FakeResponse(text=rss_text)), patch(
-            "sources.rss._fetch_full_text",
+        with patch("crawler.sources.rss.http_get", return_value=_FakeResponse(text=rss_text)), patch(
+            "crawler.sources.rss._fetch_full_text",
             return_value="Full article text",
         ):
             result = run_config(config, "2026-06-20")
@@ -326,8 +326,8 @@ class FeedFullTextEnrichmentTest(unittest.TestCase):
             },
         }
 
-        with patch("sources.rss.http_get", return_value=_FakeResponse(text=rss_text)), patch(
-            "sources.rss.fetch_jina_text",
+        with patch("crawler.sources.rss.http_get", return_value=_FakeResponse(text=rss_text)), patch(
+            "crawler.sources.rss.fetch_jina_text",
             return_value="Jina article text",
         ) as fetch_jina_text:
             result = run_config(config, "2026-06-20")
@@ -359,8 +359,8 @@ class AIBlogFullTextEnrichmentTest(unittest.TestCase):
             },
         }
 
-        with patch("sources.ai_blog.http_get", return_value=_FakeResponse(text=list_html)), patch(
-            "sources.ai_blog._fetch_full_text",
+        with patch("crawler.sources.ai_blog.http_get", return_value=_FakeResponse(text=list_html)), patch(
+            "crawler.sources.ai_blog._fetch_full_text",
             return_value="Full blog article",
         ):
             result = run_config(config, "2026-06-20")
@@ -396,8 +396,8 @@ class AIBlogFullTextEnrichmentTest(unittest.TestCase):
             },
         }
 
-        with patch("sources.ai_blog.http_get", return_value=_FakeResponse(text=list_html)), patch(
-            "sources.ai_blog.fetch_jina_text",
+        with patch("crawler.sources.ai_blog.http_get", return_value=_FakeResponse(text=list_html)), patch(
+            "crawler.sources.ai_blog.fetch_jina_text",
             return_value="Jina blog article",
         ) as fetch_jina_text:
             result = run_config(config, "2026-06-20")
@@ -458,7 +458,7 @@ class V2EXEnrichmentTest(unittest.TestCase):
             },
         }
 
-        with patch("sources.community_v2ex.http_get", side_effect=fake_get):
+        with patch("crawler.sources.community_v2ex.http_get", side_effect=fake_get):
             result = run_config(config, "2026-06-20")
 
         row = result.rows[0]
@@ -515,7 +515,7 @@ class LinuxDoEnrichmentTest(unittest.TestCase):
             },
         }
 
-        with patch("sources.community_linuxdo.http_get", side_effect=fake_get):
+        with patch("crawler.sources.community_linuxdo.http_get", side_effect=fake_get):
             result = run_config(config, "2026-06-20")
 
         row = result.rows[0]
@@ -575,7 +575,7 @@ class ProductHuntEnrichmentTest(unittest.TestCase):
             },
         }
 
-        with patch.dict("os.environ", {"PRODUCTHUNT_TOKEN": "token"}), patch("sources.product_hunt.http_post", return_value=_FakeResponse(payload)):
+        with patch.dict("os.environ", {"PRODUCTHUNT_TOKEN": "token"}), patch("crawler.sources.product_hunt.http_post", return_value=_FakeResponse(payload)):
             result = run_config(config, "2026-06-20")
 
         self.assertEqual(result.rows[0]["context_content"]["top_comments"][0]["text"], "Useful launch")
@@ -638,7 +638,7 @@ class RedditEnrichmentTest(unittest.TestCase):
         }
 
         with patch.dict("os.environ", {"REDDIT_CLIENT_ID": "", "REDDIT_CLIENT_SECRET": ""}), patch(
-            "sources.reddit.http_get",
+            "crawler.sources.reddit.http_get",
             side_effect=fake_get,
         ):
             result = run_config(config, "2026-06-20")
@@ -698,9 +698,9 @@ class RedditEnrichmentTest(unittest.TestCase):
         }
 
         with patch.dict("os.environ", {"REDDIT_CLIENT_ID": "client", "REDDIT_CLIENT_SECRET": "secret"}), patch(
-            "sources.reddit.http_post",
+            "crawler.sources.reddit.http_post",
             return_value=_FakeResponse(token_payload),
-        ), patch("sources.reddit.http_get", side_effect=fake_get):
+        ), patch("crawler.sources.reddit.http_get", side_effect=fake_get):
             result = run_config(config, "2026-06-20")
 
         row = result.rows[0]
@@ -761,7 +761,7 @@ class OpenReviewEnrichmentTest(unittest.TestCase):
             },
         }
 
-        with patch("sources.openreview.http_get", side_effect=fake_get):
+        with patch("crawler.sources.openreview.http_get", side_effect=fake_get):
             result = run_config(config, "2026-06-20")
 
         replies = result.rows[0]["context_content"]["top_replies"]
@@ -800,7 +800,7 @@ class GitHubReleasesEnrichmentTest(unittest.TestCase):
             },
         }
 
-        with patch("sources.github_releases.http_get", return_value=_FakeResponse(payload)):
+        with patch("crawler.sources.github_releases.http_get", return_value=_FakeResponse(payload)):
             result = run_config(config, "2026-06-20")
 
         row = result.rows[0]
@@ -852,7 +852,7 @@ class PyPIDownloadsEnrichmentTest(unittest.TestCase):
             },
         }
 
-        with patch("sources.package_releases.http_get", side_effect=fake_get):
+        with patch("crawler.sources.package_releases.http_get", side_effect=fake_get):
             result = run_config(config, "2026-06-20")
 
         row = result.rows[0]
@@ -904,7 +904,7 @@ class LobstersEnrichmentTest(unittest.TestCase):
             },
         }
 
-        with patch("sources.lobsters.http_get", side_effect=fake_get):
+        with patch("crawler.sources.lobsters.http_get", side_effect=fake_get):
             result = run_config(config, "2026-06-20")
 
         comments = result.rows[0]["context_content"]["top_comments"]

@@ -3,8 +3,8 @@ from __future__ import annotations
 import re
 from datetime import datetime, timezone
 
-from core.contracts import ChannelSpec, RawItem, RunContext, ScraperConfig, SourceAdapterBase, SourceRecord, enrich_enabled
-from core.registry import register_adapter
+from crawler.core.contracts import ChannelSpec, RawItem, RunContext, ScraperConfig, SourceAdapterBase, SourceRecord, enrich_enabled
+from crawler.core.registry import register_adapter
 from infra.gateways.http_transport import http_get
 
 from .spec_helpers import INTEGER, STRING, default_input, input_schema

@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
-from core.contracts import (
+from crawler.core.contracts import (
     ChannelSpec,
     InputConfig,
     RawItem,
@@ -17,9 +17,9 @@ from core.contracts import (
     SourceRecord,
     raw_item_id_from_url,
 )
-from core.registry import export_specs, register_adapter
-from core.runner import run_config
-from pipeline.sinks import JsonlSink
+from crawler.core.registry import export_specs, register_adapter
+from crawler.core.runner import run_config
+from crawler.outputs import JsonlOutput
 from scripts.migrate_scraper_configs_v1 import convert_flat_input, migrate_row
 
 
@@ -125,7 +125,7 @@ class ResearchMetadataTest(unittest.TestCase):
             },
         }
 
-        with patch("sources.rss.http_get", return_value=_FakeTextResponse(rss_text)):
+        with patch("crawler.sources.rss.http_get", return_value=_FakeTextResponse(rss_text)):
             result = run_config(config, "2026-06-20")
 
         self.assertEqual(len(result.rows), 1)
@@ -289,13 +289,13 @@ class RunnerContractTest(unittest.TestCase):
         self.assertEqual(stages, ["discover", "prune", "enrich", "normalize", "validate_output"])
 
 
-class SinkContractTest(unittest.TestCase):
-    def test_jsonl_sink_writes_rows(self) -> None:
+class OutputContractTest(unittest.TestCase):
+    def test_jsonl_output_writes_rows(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "rows.jsonl"
-            sink = JsonlSink(path)
+            output = JsonlOutput(path)
 
-            written = sink.write([{"id": "abc", "title": "Demo"}])
+            written = output.write([{"id": "abc", "title": "Demo"}])
 
             self.assertEqual(written, 1)
             self.assertEqual(json.loads(path.read_text(encoding="utf-8")), {"id": "abc", "title": "Demo"})

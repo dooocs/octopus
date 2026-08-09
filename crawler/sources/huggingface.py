@@ -5,8 +5,8 @@ from datetime import datetime, timezone, timedelta
 
 import requests
 
-from core.contracts import ChannelSpec, RawItem, RunContext, ScraperConfig, SourceAdapterBase, SourceRecord
-from core.registry import register_adapter
+from crawler.core.contracts import ChannelSpec, RawItem, RunContext, ScraperConfig, SourceAdapterBase, SourceRecord
+from crawler.core.registry import register_adapter
 from infra.gateways.http_transport import http_get
 from infra.gateways.oss import upload_image_to_oss
 

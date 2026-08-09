@@ -6,8 +6,8 @@ import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone, timedelta
 
-from core.contracts import ChannelSpec, RawItem, RunContext, ScraperConfig, SourceAdapterBase, SourceRecord, enrich_enabled
-from core.registry import register_adapter
+from crawler.core.contracts import ChannelSpec, RawItem, RunContext, ScraperConfig, SourceAdapterBase, SourceRecord, enrich_enabled
+from crawler.core.registry import register_adapter
 from infra.gateways.http_transport import http_get
 from infra.gateways.jina_reader import fetch_jina_text
 

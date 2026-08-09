@@ -5,8 +5,8 @@ from datetime import datetime, timezone, timedelta
 from typing import Any
 from urllib.parse import quote
 
-from core.contracts import ChannelSpec, RawItem, RunContext, ScraperConfig, SourceAdapterBase, SourceRecord
-from core.registry import register_adapter
+from crawler.core.contracts import ChannelSpec, RawItem, RunContext, ScraperConfig, SourceAdapterBase, SourceRecord
+from crawler.core.registry import register_adapter
 from infra.gateways.http_transport import http_get
 
 from .spec_helpers import BOOLEAN, INTEGER, STRING, STRING_ARRAY, default_input, input_schema

@@ -9,7 +9,7 @@ except ImportError:  # pragma: no cover
     def load_dotenv() -> None:
         return None
 
-from core.contracts import raw_item_id_from_url
+from crawler.core.contracts import raw_item_id_from_url
 from infra.dao import OctopusDao, RawItemRecord
 
 

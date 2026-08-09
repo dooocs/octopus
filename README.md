@@ -16,8 +16,17 @@ The crawler foundation refactor plan lives in:
 
 The initial crawler sources were migrated from `ahaIndexSync` without moving the
 Supabase pipeline, LLM processing, ranking, or public-site stages. Source logic
-now lives in native `sources/*` adapters that implement `discover`, `enrich`,
-`select`, and `normalize`.
+now lives in native `crawler/sources/*` adapters that implement `discover`,
+`prune`, `enrich`, and `normalize`.
+
+## Package Layout
+
+- `crawler/core/`: contracts, adapter registry, runner, and validation.
+- `crawler/sources/`: source-specific adapters.
+- `crawler/outputs/`: output targets such as JSONL and RDS.
+- `crawler/runtime/`: managed run orchestration.
+- `infra/`: external gateways, DAO access, and Supabase REST helpers.
+- `scripts/`: thin CLI entry points and one-off utilities.
 
 Current adapters:
 

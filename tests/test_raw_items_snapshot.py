@@ -4,7 +4,7 @@ import unittest
 from datetime import date, datetime
 from unittest.mock import Mock, patch
 
-from core.contracts import raw_item_id_from_url
+from crawler.core.contracts import raw_item_id_from_url
 from scripts.sync_raw_items_snapshot import (
     SNAPSHOT_TABLE,
     SupabaseSnapshotClient,

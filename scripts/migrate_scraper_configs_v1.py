@@ -11,9 +11,9 @@ except ImportError:  # pragma: no cover
     def load_dotenv() -> None:
         return None
 
-from core.registry import get_adapter, list_types
-from core.validation import validate_input
-from scripts.octp_supabase import SupabaseRestClient
+from crawler.core.registry import get_adapter, list_types
+from crawler.core.validation import validate_input
+from infra.supabase import SupabaseRestClient
 
 INPUT_KEYS = ("source", "fetch", "filters", "enrich")
 LEGACY_INPUT_KEYS = {"source", "fetch", "filters", "enrich", "runtime"}

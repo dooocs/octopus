@@ -6,8 +6,10 @@ from typing import Any
 
 from infra.dao import OctopusDao, RawItemRecord
 
+__all__ = ["JsonlOutput", "RdsOutput"]
 
-class JsonlSink:
+
+class JsonlOutput:
     def __init__(self, path: str | Path) -> None:
         self.path = Path(path)
 
@@ -26,7 +28,7 @@ class JsonlSink:
         return len(rows)
 
 
-class RdsSink:
+class RdsOutput:
     def write(self, rows: list[dict[str, Any]]) -> int:
         records = [RawItemRecord.from_mapping(row) for row in rows]
         if not records:
