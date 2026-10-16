@@ -35,6 +35,7 @@ Current adapters:
 - `hackernews`
 - `rss`
 - `twitter_twscrape`
+- `twitter_feed` (动态 tab: hourly windows of watched accounts' original posts, media archived to OSS; see `docs/feed-pipeline-design.md`)
 - `ai_blog`
 - `community_v2ex`
 - `community_linuxdo`

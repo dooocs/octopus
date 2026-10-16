@@ -1943,6 +1943,103 @@
     "description": "抓取标准 RSS/Atom 订阅源。"
   },
   {
+    "scraper": "twitter_feed",
+    "label": "Twitter / X 动态（博主时间线）",
+    "group": "Social",
+    "default_source_type": "social",
+    "default_item_type": "post",
+    "input_schema_version": 1,
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "source",
+        "fetch",
+        "filters",
+        "enrich"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "watch_accounts": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "fetch": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "max_lookback_hours": {
+              "type": "integer"
+            },
+            "overlap_minutes": {
+              "type": "integer"
+            },
+            "max_pages": {
+              "type": "integer"
+            }
+          }
+        },
+        "filters": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {}
+        },
+        "enrich": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "enum": [
+                  "media_archive"
+                ]
+              },
+              "when": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true
+          }
+        }
+      }
+    },
+    "default_input": {
+      "source": {
+        "watch_accounts": []
+      },
+      "fetch": {
+        "max_lookback_hours": 24,
+        "overlap_minutes": 5,
+        "max_pages": 25
+      },
+      "filters": {},
+      "enrich": [
+        {
+          "name": "media_archive"
+        }
+      ]
+    },
+    "required_secrets": [
+      "TWITTERAPI_IO_KEY"
+    ],
+    "supported_enrichers": [
+      "media_archive"
+    ],
+    "rate_limit": {},
+    "description": "按时间窗口抓取关注账号的原创推文和自己的 thread（排除转推、引用、回复他人），图片转存 OSS。"
+  },
+  {
     "scraper": "twitter_twscrape",
     "label": "Twitter / X",
     "group": "Social",

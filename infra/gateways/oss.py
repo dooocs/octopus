@@ -137,6 +137,64 @@ def upload_image_to_oss(url: str, date_str: str | None = None) -> str | None:
         return None
 
 
+MAX_MEDIA_BYTES = 15 * 1024 * 1024
+
+
+def archive_media(url: str, prefix: str) -> dict[str, object] | None:
+    """Download `url` and keep it on OSS under `<prefix>/<sha256><ext>`.
+
+    Content-addressed: the same bytes are stored once, whatever URL they came
+    from, and an object that is already there is not uploaded again. Returns
+    {"url", "key", "content_type", "bytes"}, or None when OSS is not configured
+    or the download fails (the caller keeps the item without this file).
+    """
+    bucket = _get_bucket()
+    if bucket is None:
+        return None
+    try:
+        resp = None
+        for attempt in range(3):
+            resp = http_get(
+                url,
+                timeout=DOWNLOAD_TIMEOUT,
+                headers={"User-Agent": "Mozilla/5.0 (compatible; ImageFetcher/1.0)"},
+            )
+            if resp.status_code == 200:
+                break
+            if attempt < 2:
+                time.sleep(2)
+        if resp is None or resp.status_code != 200:
+            print(f"  Media download failed [{resp.status_code if resp is not None else 'empty'}]: {url[:80]}")
+            return None
+        data = resp.content
+        if not data or len(data) < 100 or len(data) > MAX_MEDIA_BYTES:
+            print(f"  Media skipped (size {len(data or b'')} bytes): {url[:80]}")
+            return None
+        content_type = (resp.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+        if content_type and not content_type.startswith("image/"):
+            print(f"  Media skipped (content type {content_type}): {url[:80]}")
+            return None
+        key = f"{prefix.strip('/')}/{hashlib.sha256(data).hexdigest()}{_guess_ext(url, content_type)}"
+        if not bucket.object_exists(key):
+            bucket.put_object(
+                key,
+                data,
+                headers={
+                    "Content-Type": content_type or "application/octet-stream",
+                    "Cache-Control": "max-age=31536000, immutable",
+                },
+            )
+        return {
+            "url": f"https://{OSS_CUSTOM_DOMAIN}/{key}",
+            "key": key,
+            "content_type": content_type or None,
+            "bytes": len(data),
+        }
+    except Exception as e:
+        print(f"  Media archive failed: {url[:80]} | {e}")
+        return None
+
+
 def upload_images_to_oss(urls: list[str], date_str: str | None = None) -> list[str]:
     """Upload a list of image URLs to OSS.
 
