@@ -184,10 +184,12 @@ class FeedDigestTest(unittest.TestCase):
         result = run_pipeline("feed_digest", deps)
         self.assertEqual((result["posts"], result["authors"]), (0, 0))
 
-    def test_disabled_pipelines_do_nothing(self) -> None:
+    def test_disabled_pipelines_do_nothing_unless_a_test_run_asks(self) -> None:
         tables: dict[str, FakeTable] = {}
         self.assertEqual(run_pipeline("feed_digest", _deps(FakeRawItems([]), tables, FakeLlm(), enabled=False)), {"status": "skipped"})
         self.assertEqual(tables["octp_pipeline_runs"].rows, [])
+        result = run_pipeline("feed_digest", _deps(FakeRawItems([]), tables, FakeLlm(), enabled=False), include_disabled=True)
+        self.assertEqual(result["status"], "success")
 
     def test_failures_are_recorded_and_raised(self) -> None:
         class Broken(FakeLlm):

@@ -19,6 +19,7 @@ from crawler.outputs import JsonlOutput, RdsOutput
 from infra.supabase import (
     SupabaseRestClient,
     load_enabled_runtime_configs,
+    runtime_config_from_row,
     split_supported_configs,
 )
 
@@ -80,8 +81,19 @@ def _update_run_safe(client: SupabaseRestClient, run_id: str | None, payload: di
 def run_global_scrape(args: argparse.Namespace) -> int:
     client = SupabaseRestClient.from_env()
     run_context = _github_run_context()
-    configs, skipped = split_supported_configs(load_enabled_runtime_configs(client), list_types())
     only = getattr(args, "only", "") or ""
+    include_disabled = bool(getattr(args, "include_disabled", False))
+    if include_disabled and not only:
+        raise ValueError("--include-disabled needs --only: it is for test runs of specific configs")
+    if include_disabled:
+        loaded = [
+            runtime_config_from_row(row)
+            for row in client.fetch_config_rows()
+            if not row.get("archived_at")
+        ]
+    else:
+        loaded = load_enabled_runtime_configs(client)
+    configs, skipped = split_supported_configs(loaded, list_types())
     if only:
         wanted = {value.strip() for value in only.split(",") if value.strip()}
         configs = [c for c in configs if c.get("sub_source_type") in wanted]
@@ -162,7 +174,11 @@ def run_global_scrape(args: argparse.Namespace) -> int:
             total_items += len(result.rows)
             total_written += written
 
-            if config.get("id"):
+            # State (e.g. the feed cursor) only advances when the rows reached
+            # the durable sink; a JSONL-only test run must not skip ahead.
+            if config.get("id") and not args.write_rds:
+                print(f"  state not saved for {config['name']}: run without --write-rds")
+            elif config.get("id"):
                 client.upsert_scraper_state(
                     {
                         "scraper_config_id": config.get("id"),
@@ -261,6 +277,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--only",
         default="",
         help="Comma-separated sub_source_type values: run only these enabled configs (e.g. x_feed_accounts).",
+    )
+    parser.add_argument(
+        "--include-disabled",
+        action="store_true",
+        help="With --only: also run those configs when disabled (manual test runs).",
     )
     parser.add_argument("--write-rds", action="store_true", help="Write crawler output to Aliyun RDS MySQL.")
     parser.add_argument("--continue-on-error", action="store_true", help="Continue after scraper failure.")

@@ -20,6 +20,7 @@ def main() -> None:
     load_dotenv()
     parser = argparse.ArgumentParser(description="Run one Octopus processing pipeline")
     parser.add_argument("slug", help="octp_pipelines.slug, e.g. feed_digest")
+    parser.add_argument("--include-disabled", action="store_true", help="Run it even when disabled (manual test runs).")
     args = parser.parse_args()
 
     supabase = SupabaseRestClient.from_env()
@@ -29,7 +30,7 @@ def main() -> None:
             table=lambda name: SupabaseTable(supabase, name),
             llm=ChatClient.from_config,
         )
-        run_pipeline(args.slug, deps)
+        run_pipeline(args.slug, deps, include_disabled=args.include_disabled)
 
 
 if __name__ == "__main__":

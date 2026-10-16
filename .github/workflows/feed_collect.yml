@@ -13,10 +13,15 @@ on:
   workflow_dispatch:
     inputs:
       write_rds:
-        description: "Write fetched rows to Aliyun RDS raw_items."
+        description: "Write fetched rows to Aliyun RDS raw_items (and move the cursor). Off = dry run: JSONL artifact only."
         required: false
         type: boolean
         default: true
+      include_disabled:
+        description: "Test run: also run the feed config and pipeline while they are disabled."
+        required: false
+        type: boolean
+        default: false
 
 concurrency:
   group: feed-pipeline
@@ -65,13 +70,21 @@ jobs:
           if [[ "${{ github.event_name }}" == "schedule" || "${{ inputs.write_rds }}" == "true" ]]; then
             args+=(--write-rds)
           fi
+          if [[ "${{ inputs.include_disabled }}" == "true" ]]; then
+            args+=(--include-disabled)
+          fi
           python -m scripts.global_scrape "${args[@]}"
 
       - name: Process the feed (translation and author summaries)
         # Reads the last 24 hours of raw_items, so a failed hour is repaired by
         # the next run. A no-op while the feed_digest pipeline is disabled.
         if: github.event_name == 'schedule' || inputs.write_rds
-        run: python -m scripts.run_pipeline feed_digest
+        run: |
+          if [[ "${{ inputs.include_disabled }}" == "true" ]]; then
+            python -m scripts.run_pipeline feed_digest --include-disabled
+          else
+            python -m scripts.run_pipeline feed_digest
+          fi
 
       - name: Upload the collected rows
         if: always()
