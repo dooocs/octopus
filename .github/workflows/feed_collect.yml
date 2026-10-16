@@ -1,0 +1,76 @@
+name: Feed Collect
+
+# The 动态 tab's collection run (docs/feed-pipeline-design.md §4.6):
+# hourly from 06:00 to 01:00 Beijing time. Each run fetches the window since
+# the cursor of the last successful run, so the 06:00 run covers 01:00–06:00.
+# Only the x_feed_accounts config runs here; while it is disabled the run is a
+# no-op. A failure (auth, credits, API error) fails the workflow, and the
+# cursor does not move, so the next run covers the missed window too.
+
+on:
+  schedule:
+    - cron: "0 22,23,0-17 * * *" # UTC; 06:00–01:00 Asia/Shanghai
+  workflow_dispatch:
+    inputs:
+      write_rds:
+        description: "Write fetched rows to Aliyun RDS raw_items."
+        required: false
+        type: boolean
+        default: true
+
+concurrency:
+  group: feed-pipeline
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      TZ: Asia/Shanghai
+
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+      OCTOPUS_RDS_HOST: ${{ secrets.OCTOPUS_RDS_HOST }}
+      OCTOPUS_RDS_PORT: ${{ secrets.OCTOPUS_RDS_PORT }}
+      OCTOPUS_RDS_USER: ${{ secrets.OCTOPUS_RDS_USER }}
+      OCTOPUS_RDS_PASSWORD: ${{ secrets.OCTOPUS_RDS_PASSWORD }}
+      OCTOPUS_RDS_DATABASE: ${{ secrets.OCTOPUS_RDS_DATABASE }}
+      OCTOPUS_RDS_CHARSET: ${{ secrets.OCTOPUS_RDS_CHARSET }}
+      OCTOPUS_RDS_CONNECT_TIMEOUT: ${{ secrets.OCTOPUS_RDS_CONNECT_TIMEOUT }}
+      OCTOPUS_RDS_SSL_CA: ${{ secrets.OCTOPUS_RDS_SSL_CA }}
+
+      OSS_ACCESS_KEY_ID: ${{ secrets.OSS_ACCESS_KEY_ID }}
+      OSS_ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
+      TWITTERAPI_IO_KEY: ${{ secrets.TWITTERAPI_IO_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: python -m pip install .
+
+      - name: Collect the feed window
+        run: |
+          args=(--only x_feed_accounts --fail-on-error --output outputs/feed/raw_items.jsonl)
+          if [[ "${{ github.event_name }}" == "schedule" || "${{ inputs.write_rds }}" == "true" ]]; then
+            args+=(--write-rds)
+          fi
+          python -m scripts.global_scrape "${args[@]}"
+
+      - name: Upload the collected rows
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: feed-raw-items
+          path: outputs/feed/raw_items.jsonl
+          if-no-files-found: ignore
+          retention-days: 3

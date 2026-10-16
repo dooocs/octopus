@@ -54,3 +54,4 @@ def _load_all() -> None:
     import crawler.sources.reddit  # noqa: F401
     import crawler.sources.rss  # noqa: F401
     import crawler.sources.twitter  # noqa: F401
+    import crawler.sources.twitter_feed  # noqa: F401

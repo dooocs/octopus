@@ -1,10 +1,8 @@
 from __future__ import annotations
 
 import asyncio
-import os
 from dataclasses import dataclass
 from datetime import datetime, timezone, timedelta
-from email.utils import parsedate_to_datetime
 
 import httpx
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
@@ -13,6 +11,7 @@ from crawler.core.contracts import ChannelSpec, RawItem, RunContext, ScraperConf
 from crawler.core.registry import register_adapter
 
 from .spec_helpers import INTEGER, STRING_ARRAY, default_input, input_schema
+from .twitterapi_io import TwitterApiRetryableError, check_response, parse_created_at, require_api_key
 
 _SEM = asyncio.Semaphore(5)
 
@@ -37,16 +36,8 @@ class _Tweet:
     created_at: datetime
 
 
-class _RetryableError(Exception):
-    pass
-
-
-class _AuthError(Exception):
-    pass
-
-
 def _parse_twitter_date(value: str) -> datetime:
-    return parsedate_to_datetime(value)
+    return parse_created_at(value)
 
 
 @register_adapter
@@ -74,19 +65,12 @@ class TwitterAdapter(SourceAdapterBase):
     )
 
     def discover(self, ctx: RunContext, config: ScraperConfig) -> list[SourceRecord]:
-        try:
-            return asyncio.run(self._fetch_all(config))
-        except KeyboardInterrupt:
-            raise
-        except Exception as exc:
-            if "超时" in str(exc):
-                raise
-            return []
+        # Errors propagate: a missing key, an exhausted balance or an API error
+        # fails the task instead of looking like "no new tweets".
+        return asyncio.run(self._fetch_all(config))
 
     async def _fetch_all(self, config: ScraperConfig) -> list[SourceRecord]:
-        api_key = os.environ.get("TWITTERAPI_IO_KEY")
-        if not api_key:
-            return []
+        api_key = require_api_key()
         max_age = int(config.input.fetch.get("max_age_days") or 2)
         cutoff = datetime.now(timezone.utc) - timedelta(days=max_age)
         seen: set[str] = set()
@@ -156,22 +140,18 @@ class TwitterAdapter(SourceAdapterBase):
         return all_tweets
 
     @retry(
-        retry=retry_if_exception_type(_RetryableError),
+        retry=retry_if_exception_type((TwitterApiRetryableError, httpx.TransportError)),
         wait=wait_exponential(multiplier=1, min=2, max=30),
         stop=stop_after_attempt(4),
         reraise=True,
     )
     async def _request_with_retry(self, endpoint: str, params: dict) -> dict:
         resp = await self._client.get(endpoint, params=params)
-        if resp.status_code in (401, 403):
-            raise _AuthError(f"auth failed: {resp.text[:200]}")
-        if resp.status_code == 429:
-            raise _RetryableError("rate limited")
-        if 500 <= resp.status_code < 600:
-            raise _RetryableError(f"server error {resp.status_code}")
-        if resp.status_code != 200:
-            raise RuntimeError(f"unexpected {resp.status_code}: {resp.text[:200]}")
-        return resp.json()
+        try:
+            body = resp.json()
+        except ValueError:
+            body = None
+        return check_response(resp.status_code, body, resp.text)
 
     def _from_api_response(self, raw: dict) -> _Tweet:
         author = raw.get("author") or {}

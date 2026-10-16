@@ -81,6 +81,14 @@ def run_global_scrape(args: argparse.Namespace) -> int:
     client = SupabaseRestClient.from_env()
     run_context = _github_run_context()
     configs, skipped = split_supported_configs(load_enabled_runtime_configs(client), list_types())
+    only = getattr(args, "only", "") or ""
+    if only:
+        wanted = {value.strip() for value in only.split(",") if value.strip()}
+        configs = [c for c in configs if c.get("sub_source_type") in wanted]
+        skipped = [c for c in skipped if c.get("sub_source_type") in wanted]
+        if not configs:
+            print(f"no enabled scraper config matches --only {sorted(wanted)}; nothing to do")
+            return 0
 
     print(f"loaded enabled configs: runnable={len(configs)}, skipped={len(skipped)}")
     if skipped:
@@ -248,6 +256,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--output",
         default="outputs/global_scrape/raw_items.jsonl",
         help="Optional JSONL output path for fetched raw_items rows.",
+    )
+    parser.add_argument(
+        "--only",
+        default="",
+        help="Comma-separated sub_source_type values: run only these enabled configs (e.g. x_feed_accounts).",
     )
     parser.add_argument("--write-rds", action="store_true", help="Write crawler output to Aliyun RDS MySQL.")
     parser.add_argument("--continue-on-error", action="store_true", help="Continue after scraper failure.")
