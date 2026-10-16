@@ -7,7 +7,9 @@ import {
   Code2,
   Copy,
   Database,
+  Archive,
   Edit3,
+  GitBranch,
   Github,
   History,
   LayoutList,
@@ -15,19 +17,20 @@ import {
   Plus,
   RefreshCw,
   Search,
-  Trash2,
   XCircle
 } from 'lucide-react'
-import type { AuthUser, ItemTypeRow, ScraperChannel, ScraperConfigDraft, ScraperConfigRow } from '../types'
+import type { AuthUser, ItemTypeRow, PipelineRow, ScraperChannel, ScraperConfigDraft, ScraperConfigRow } from '../types'
 import { getChannel, scraperChannels } from '../lib/channels'
+import { listPipelines, pipelineReferences } from '../lib/pipelines'
 import {
-  deleteScraperConfig,
+  archiveScraperConfig,
   listItemTypes,
   listScraperConfigs,
   saveScraperConfig,
   setScraperConfigEnabled
 } from '../lib/scraperConfigs'
 import ConfigModal from './ConfigModal'
+import PipelinesPanel from './PipelinesPanel'
 import RawItemsSnapshotPanel from './RawItemsSnapshotPanel'
 import ScraperLogsPanel from './ScraperLogsPanel'
 import ToggleSwitch from './ToggleSwitch'
@@ -41,7 +44,7 @@ type ModalState =
   | { mode: 'create'; channel: ScraperChannel; row?: never }
   | { mode: 'edit'; channel: ScraperChannel; row: ScraperConfigRow }
 
-type ActiveView = 'configs' | 'effective' | 'logs' | 'snapshots'
+type ActiveView = 'configs' | 'effective' | 'logs' | 'snapshots' | 'pipelines'
 
 function formatTime(value?: string | null) {
   if (!value) return '-'
@@ -128,20 +131,24 @@ export default function ScraperDashboard({ authUser, onLogout }: ScraperDashboar
   const [modal, setModal] = useState<ModalState | null>(null)
   const [copied, setCopied] = useState(false)
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(getDefaultCollapsedGroups)
+  const [pipelines, setPipelines] = useState<PipelineRow[]>([])
 
   const loadConfigs = useCallback(async () => {
     setLoading(true)
     setError('')
     try {
-      const [rows, types] = await Promise.all([listScraperConfigs(), listItemTypes()])
+      const [rows, types, pipelineRows] = await Promise.all([listScraperConfigs(), listItemTypes(), listPipelines()])
       setConfigs(rows)
       setItemTypes(types)
+      setPipelines(pipelineRows)
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : String(loadError))
     } finally {
       setLoading(false)
     }
   }, [])
+
+  const references = useMemo(() => pipelineReferences(pipelines), [pipelines])
 
   useEffect(() => {
     void loadConfigs()
@@ -206,6 +213,7 @@ export default function ScraperDashboard({ authUser, onLogout }: ScraperDashboar
 
   const topbarCopy = useMemo(() => {
     if (activeView === 'snapshots') return { eyebrow: 'Raw Items Snapshot', title: '快照内容' }
+    if (activeView === 'pipelines') return { eyebrow: 'Processing Pipelines', title: '加工流程' }
     if (activeView === 'logs') return { eyebrow: 'Scraper Logs', title: '运行日志' }
     if (activeView === 'effective') return { eyebrow: 'Enabled Now', title: '当前生效的抓取配置' }
     return { eyebrow: 'Scraper Configs', title: '抓取配置管理' }
@@ -232,16 +240,24 @@ export default function ScraperDashboard({ authUser, onLogout }: ScraperDashboar
     }
   }
 
-  async function removeRow(row: ScraperConfigRow) {
-    if (!window.confirm(`确定要删除 "${row.name}" 吗？`)) return
+  async function archiveRow(row: ScraperConfigRow) {
+    const dependents = references.get(row.id) || []
+    if (dependents.length > 0) {
+      window.alert(
+        `"${row.name}" 被加工流程 ${dependents.map((p) => `"${p.name}"`).join('、')} 依赖，不能归档。\n` +
+        '可以先停用它；要彻底移除，先在加工流程里去掉这条依赖。'
+      )
+      return
+    }
+    if (!window.confirm(`归档 "${row.name}"？\n归档会停用并隐藏这条配置，已抓取的数据和运行记录保留。`)) return
 
     setBusyId(row.id)
     setError('')
     try {
-      await deleteScraperConfig(row.id)
+      await archiveScraperConfig(row.id)
       setConfigs((current) => current.filter((item) => item.id !== row.id))
-    } catch (deleteError) {
-      setError(deleteError instanceof Error ? deleteError.message : String(deleteError))
+    } catch (archiveError) {
+      setError(archiveError instanceof Error ? archiveError.message : String(archiveError))
     } finally {
       setBusyId(null)
     }
@@ -311,6 +327,15 @@ export default function ScraperDashboard({ authUser, onLogout }: ScraperDashboar
             <History size={16} aria-hidden="true" />
             <span>运行日志</span>
             <em>Logs</em>
+          </button>
+          <button
+            type="button"
+            className={`sidebar-nav-item ${activeView === 'pipelines' ? 'active' : ''}`}
+            onClick={() => setActiveView('pipelines')}
+          >
+            <GitBranch size={16} aria-hidden="true" />
+            <span>加工流程</span>
+            <em>{pipelines.filter((p) => p.enabled).length}/{pipelines.length}</em>
           </button>
         </nav>
 
@@ -452,6 +477,11 @@ export default function ScraperDashboard({ authUser, onLogout }: ScraperDashboar
                       <div>
                         <strong>{row.name}</strong>
                         <span>P{row.priority} · {row.sub_source_type} · {formatTime(row.updated_date || row.created_date)}</span>
+                        {references.get(row.id)?.length ? (
+                          <span className="dependency-note">
+                            被 {references.get(row.id)!.map((p) => p.name).join('、')} 依赖
+                          </span>
+                        ) : null}
                       </div>
                       <div className="row-actions">
                         <ToggleSwitch
@@ -471,10 +501,12 @@ export default function ScraperDashboard({ authUser, onLogout }: ScraperDashboar
                         <button
                           className="icon-button danger"
                           type="button"
-                          aria-label={`删除 ${row.name}`}
-                          onClick={() => void removeRow(row)}
+                          aria-label={`归档 ${row.name}`}
+                          title={references.get(row.id)?.length ? '被加工流程依赖，只能停用' : '归档（停用并隐藏，保留历史）'}
+                          disabled={busyId === row.id}
+                          onClick={() => void archiveRow(row)}
                         >
-                          <Trash2 size={16} aria-hidden="true" />
+                          <Archive size={16} aria-hidden="true" />
                         </button>
                       </div>
                     </article>
@@ -558,6 +590,16 @@ export default function ScraperDashboard({ authUser, onLogout }: ScraperDashboar
             </section>
           ) : activeView === 'logs' ? (
             <ScraperLogsPanel configs={configs} />
+          ) : activeView === 'pipelines' ? (
+            <PipelinesPanel
+              pipelines={pipelines}
+              configs={configs}
+              loading={loading}
+              onReload={() => void loadConfigs()}
+              onChanged={(pipeline) =>
+                setPipelines((current) => current.map((item) => (item.id === pipeline.id ? { ...item, ...pipeline } : item)))
+              }
+            />
           ) : (
             <RawItemsSnapshotPanel />
           )}
