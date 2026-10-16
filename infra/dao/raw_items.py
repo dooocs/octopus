@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 from typing import Any, Iterable, Sequence
 
 from .base import AliyunRdsDaoBase
@@ -71,6 +72,26 @@ class RawItemsDao:
     def upsert_many_from_crawler_items(self, items: Iterable[Any]) -> int:
         return self.upsert_many(RawItemRecord.from_crawler_item(item) for item in items)
 
+    def select_published_since(self, sub_source_types: Sequence[str], since: datetime) -> list[dict[str, Any]]:
+        """Rows of these sub source types published at or after `since` (UTC), oldest first."""
+        if not sub_source_types:
+            return []
+        placeholders = ", ".join(["%s"] * len(sub_source_types))
+        sql = (
+            f"SELECT * FROM `{self.table_name}` "
+            f"WHERE `sub_source_type` IN ({placeholders}) AND `source_published_date` >= %s "
+            "ORDER BY `source_published_date` ASC"
+        )
+        params = [*sub_source_types, since.astimezone(timezone.utc).replace(tzinfo=None)]
+        return [_decode_row(row) for row in self.db.execute_query(sql, params)]
+
+    def select_by_ids(self, ids: Sequence[str]) -> list[dict[str, Any]]:
+        if not ids:
+            return []
+        placeholders = ", ".join(["%s"] * len(ids))
+        sql = f"SELECT * FROM `{self.table_name}` WHERE `id` IN ({placeholders})"
+        return [_decode_row(row) for row in self.db.execute_query(sql, list(ids))]
+
     def _params(self, record: RawItemRecord) -> Sequence[Any]:
         return (
             record.id,
@@ -91,3 +112,20 @@ class RawItemsDao:
             _json_param(record.extra),
             _json_param(record.scrape_config_snapshot),
         )
+
+
+_JSON_COLUMNS = ("metrics", "context_content", "extra", "scrape_config_snapshot")
+
+
+def _decode_row(row: dict[str, Any]) -> dict[str, Any]:
+    """JSON columns as objects, DATETIME columns as aware UTC datetimes."""
+    out = dict(row)
+    for key in _JSON_COLUMNS:
+        value = out.get(key)
+        if isinstance(value, (str, bytes)):
+            out[key] = json.loads(value) if value else None
+    for key in ("created_date", "updated_date", "source_published_date"):
+        value = out.get(key)
+        if isinstance(value, datetime) and value.tzinfo is None:
+            out[key] = value.replace(tzinfo=timezone.utc)
+    return out

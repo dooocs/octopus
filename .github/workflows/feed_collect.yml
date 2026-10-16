@@ -1,6 +1,6 @@
 name: Feed Collect
 
-# The 动态 tab's collection run (docs/feed-pipeline-design.md §4.6):
+# The 动态 tab's collection and processing run (docs/feed-pipeline-design.md §4.6, §5.2):
 # hourly from 06:00 to 01:00 Beijing time. Each run fetches the window since
 # the cursor of the last successful run, so the 06:00 run covers 01:00–06:00.
 # Only the x_feed_accounts config runs here; while it is disabled the run is a
@@ -44,6 +44,7 @@ jobs:
       OSS_ACCESS_KEY_ID: ${{ secrets.OSS_ACCESS_KEY_ID }}
       OSS_ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
       TWITTERAPI_IO_KEY: ${{ secrets.TWITTERAPI_IO_KEY }}
+      KIMI_API_KEY: ${{ secrets.KIMI_API_KEY }}
 
     steps:
       - name: Checkout
@@ -65,6 +66,12 @@ jobs:
             args+=(--write-rds)
           fi
           python -m scripts.global_scrape "${args[@]}"
+
+      - name: Process the feed (translation and author summaries)
+        # Reads the last 24 hours of raw_items, so a failed hour is repaired by
+        # the next run. A no-op while the feed_digest pipeline is disabled.
+        if: github.event_name == 'schedule' || inputs.write_rds
+        run: python -m scripts.run_pipeline feed_digest
 
       - name: Upload the collected rows
         if: always()

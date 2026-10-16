@@ -259,5 +259,57 @@ class SupabaseRestClient:
         response.raise_for_status()
 
 
+class SupabaseTable:
+    """Generic PostgREST access for one table (processing layer)."""
+
+    def __init__(self, client: SupabaseRestClient, name: str) -> None:
+        self.client = client
+        self.name = name
+
+    @property
+    def url(self) -> str:
+        return self.client._table_url(self.name)
+
+    def select(self, params: dict[str, str]) -> list[dict[str, Any]]:
+        response = http_get(self.url, headers=self.client.headers, params={"select": "*", **params}, timeout=30)
+        response.raise_for_status()
+        data = response.json()
+        if not isinstance(data, list):
+            raise TypeError(f"Supabase {self.name} response must be a JSON array")
+        return data
+
+    def upsert(self, rows: list[dict[str, Any]], on_conflict: str) -> None:
+        for start in range(0, len(rows), 200):
+            response = http_post(
+                self.url,
+                headers={**self.client.headers, "Prefer": "resolution=merge-duplicates,return=minimal"},
+                params={"on_conflict": on_conflict},
+                json=rows[start:start + 200],
+                timeout=60,
+            )
+            response.raise_for_status()
+
+    def insert(self, payload: dict[str, Any]) -> dict[str, Any]:
+        response = http_post(
+            self.url,
+            headers={**self.client.headers, "Prefer": "return=representation"},
+            json=payload,
+            timeout=30,
+        )
+        response.raise_for_status()
+        data = response.json()
+        return data[0] if isinstance(data, list) and data else {}
+
+    def update(self, filters: dict[str, str], payload: dict[str, Any]) -> None:
+        response = http_patch(
+            self.url,
+            headers={**self.client.headers, "Prefer": "return=minimal"},
+            params=filters,
+            json=payload,
+            timeout=30,
+        )
+        response.raise_for_status()
+
+
 def load_enabled_runtime_configs(client: SupabaseRestClient) -> list[dict[str, Any]]:
     return [runtime_config_from_row(row) for row in client.fetch_enabled_config_rows()]
