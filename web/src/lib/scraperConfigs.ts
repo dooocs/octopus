@@ -7,9 +7,11 @@ const ITEM_TYPE_TABLE_NAME = 'octp_item_types'
 export async function listScraperConfigs() {
   if (!supabase) return []
 
+  // Archived configs are kept for the history that references them, not listed.
   const { data, error } = await supabase
     .from(CONFIG_TABLE_NAME)
     .select('*')
+    .is('archived_at', null)
     .order('priority', { ascending: true })
     .order('name', { ascending: true })
 
@@ -69,9 +71,18 @@ export async function setScraperConfigEnabled(id: string | number, enabled: bool
   if (error) throw error
 }
 
-export async function deleteScraperConfig(id: string | number) {
+/**
+ * Stops a config and hides it, keeping the row: collected raw_items and runs
+ * still point at it. Configs a pipeline depends on are refused by the caller
+ * (and a hard delete of one is refused by the database).
+ */
+export async function archiveScraperConfig(id: string | number) {
   if (!supabase) return
 
-  const { error } = await supabase.from(CONFIG_TABLE_NAME).delete().eq('id', id)
+  const { error } = await supabase
+    .from(CONFIG_TABLE_NAME)
+    .update({ enabled: false, archived_at: new Date().toISOString() })
+    .eq('id', id)
+
   if (error) throw error
 }

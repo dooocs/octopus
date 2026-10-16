@@ -17,6 +17,7 @@ export type ScraperConfigRow = {
   item_type: string
   input_schema_version?: number | null
   input: Record<string, JsonValue>
+  archived_at?: string | null
   created_date?: string | null
   updated_date?: string | null
 }
@@ -113,3 +114,30 @@ export type AuthUser = {
   login: string
   avatarUrl: string
 }
+
+export type PipelineRow = {
+  id: string
+  slug: string
+  name: string
+  kind: string
+  enabled: boolean
+  input: Record<string, JsonValue>
+  created_date?: string | null
+  updated_date?: string | null
+  octp_pipeline_sources?: { scraper_config_id: string }[]
+}
+
+export type PipelineRunStatus = 'running' | 'success' | 'partial' | 'failed'
+
+export type PipelineRunRow = {
+  id: string
+  pipeline_id: string | null
+  status: PipelineRunStatus
+  started_at: string
+  finished_at?: string | null
+  summary: Record<string, JsonValue>
+  error_message?: string | null
+}
+
+/** scraper_config_id -> the pipelines that depend on it (octp_pipeline_sources). */
+export type PipelineReferences = Map<string, { id: string; name: string }[]>
