@@ -88,14 +88,17 @@ def _load_all() -> None:
     import processing.feed_digest  # noqa: F401
 
 
-def run_pipeline(slug: str, deps: Deps) -> dict[str, Any]:
-    """Runs one configured pipeline and records the run. Raises on failure."""
+def run_pipeline(slug: str, deps: Deps, *, include_disabled: bool = False) -> dict[str, Any]:
+    """Runs one configured pipeline and records the run. Raises on failure.
+
+    include_disabled: run it even when disabled (manual test runs).
+    """
     _load_all()
     rows = deps.table(PIPELINES_TABLE).select({"slug": f"eq.{slug}", "limit": "1"})
     if not rows:
         raise ValueError(f"no pipeline configured with slug {slug!r}")
     config = PipelineConfig.from_row(rows[0])
-    if not config.enabled:
+    if not config.enabled and not include_disabled:
         print(f"pipeline {slug} is disabled; nothing to do")
         return {"status": "skipped"}
     fn = _KINDS.get(config.kind)
