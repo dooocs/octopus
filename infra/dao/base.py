@@ -80,6 +80,17 @@ class AliyunRdsDaoBase:
         conn.commit()
         return affected
 
+    def execute_query(self, sql: str, params: Sequence[Any] = ()) -> list[dict[str, Any]]:
+        """Runs a SELECT and returns its rows as dicts."""
+        import pymysql.cursors
+
+        conn = self.connect()
+        with conn.cursor(pymysql.cursors.DictCursor) as cursor:
+            cursor.execute(sql, params)
+            rows = cursor.fetchall()
+        conn.commit()  # end the read transaction so the next query sees new rows
+        return list(rows)
+
     def executemany_update(self, sql: str, params_seq: Iterable[Sequence[Any]]) -> int:
         params = list(params_seq)
         if not params:

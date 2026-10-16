@@ -26,7 +26,8 @@ octopus-aliyun-rds-test = "scripts.aliyun_rds_test_insert:main"
 octopus-export-scraper-specs = "scripts.export_scraper_specs:main"
 octopus-global-scrape = "scripts.global_scrape:main"
 octopus-migrate-scraper-configs-v1 = "scripts.migrate_scraper_configs_v1:main"
+octopus-run-pipeline = "scripts.run_pipeline:main"
 octopus-sync-raw-items-snapshot = "scripts.sync_raw_items_snapshot:main"
 
 [tool.setuptools.packages.find]
-include = ["crawler*", "infra*", "scripts*"]
+include = ["crawler*", "infra*", "processing*", "scripts*"]

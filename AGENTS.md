@@ -62,7 +62,7 @@ python -m scripts.global_scrape --continue-on-error --write-rds
 Run verification:
 
 ```bash
-python -m compileall crawler infra scripts tests
+python -m compileall crawler infra processing scripts tests
 python -m unittest discover tests
 ```
 
