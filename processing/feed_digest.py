@@ -1,13 +1,19 @@
 """feed_digest: the 动态 tab's processing (docs/feed-pipeline-design.md §5.2).
 
 raw_items of the feed (one row per tweet) → posts (a tweet, or a thread
-merged under its first tweet) → Chinese translation per post → one-sentence
-summary per author of their last 24 hours → proc_feed_posts / proc_feed_authors.
+merged under its first tweet) → Chinese translation per post → proc_feed_posts.
+The site shows the original text with the translation below it, grouped by
+author (display name and avatar are on every post row).
 
-Incremental: a post is translated again only when its content (its thread)
-or the prompt version changes; an author summary only when the posts it
-summarises change. Every hourly run re-reads the whole window, so a failed
-run is repaired by the next one.
+- A post is translated again only when its content (its thread) or the
+  prompt version changes.
+- Posts already in Chinese, or with nothing to translate (only links,
+  mentions or media), get no LLM call; their text_zh is "" and the site shows
+  the original alone.
+- A failed translation does not discard the others: the translated posts are
+  written, the failed ones are left out (never shown untranslated) and retried
+  by the next run, which re-reads the whole window. The run is recorded as
+  partial and the workflow fails so the error is visible.
 
 Pipeline input:
     {
@@ -21,26 +27,37 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Iterable
 
-from processing.core import Deps, PipelineConfig, register_pipeline
+from processing.core import Deps, PipelineConfig, PipelineIncomplete, register_pipeline
 
 POSTS_TABLE = "proc_feed_posts"
-AUTHORS_TABLE = "proc_feed_authors"
-MAX_DIGEST_POSTS = 20
 
+# Shown directly below the original, so: faithful, same paragraphs, nothing added.
 TRANSLATE_SYSTEM = (
-    "你是专业的科技翻译。把用户给出的 X（Twitter）帖子忠实翻译成简体中文。"
+    "你是专业的科技翻译。把用户给出的 X（Twitter）帖子忠实翻译成简体中文，译文会显示在原文下方供对照阅读。"
     "要求：只输出译文，不加任何解释、前言或引号；保留 @用户名、#话题、链接、代码、数字和产品/模型/公司名的原文；"
-    "语气贴近原文，口语就译成口语；多段内容保留分段；原文已经是中文时原样输出。"
+    "语气贴近原文，口语就译成口语；段落和换行与原文一一对应。"
 )
-DIGEST_SYSTEM = (
-    "你是科技资讯编辑。根据一位 X 博主最近 24 小时发的帖子（已译成中文），"
-    "用一句话概括他这段时间主要在聊什么。要求：不超过 60 个汉字；客观陈述，不评价、不夸张；"
-    "不以“他”或博主名开头；只输出这一句话。"
-)
+
+_URL = re.compile(r"https?://\S+")
+_MENTION = re.compile(r"@\w+")
+_HAN = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]")
+
+
+def needs_translation(text: str, langs: list[str]) -> bool:
+    """False for posts already in Chinese or with no words left once links and @mentions are removed."""
+    words = _MENTION.sub(" ", _URL.sub(" ", text))
+    letters = [ch for ch in words if ch.isalpha()]
+    if not letters:
+        return False
+    if langs and all(lang.lower().startswith("zh") for lang in langs):
+        return False
+    # Language unknown or mixed: mostly Chinese characters means nothing to translate.
+    return len(_HAN.findall(words)) * 2 < len(letters)
 
 
 def _md5(value: str) -> str:
@@ -70,6 +87,7 @@ class Post:
     url: str
     text_original: str
     media: list[dict[str, Any]] = field(default_factory=list)
+    langs: list[str] = field(default_factory=list)
 
     @property
     def content_hash(self) -> str:
@@ -129,6 +147,7 @@ def build_posts(rows: Iterable[dict[str, Any]]) -> list[Post]:
             url=str(root["url"]),
             text_original="\n\n".join(str(p.get("content") or "").strip() for p in ordered).strip(),
             media=media,
+            langs=sorted({str((p.get("extra") or {}).get("lang") or "") for p in ordered} - {""}),
         ))
     return sorted(posts, key=lambda p: p.updated_at, reverse=True)
 
@@ -163,30 +182,41 @@ def run_feed_digest(config: PipelineConfig, deps: Deps) -> dict[str, Any]:
         raise ValueError("feed_digest needs input.selector.sub_source_types")
     window = timedelta(hours=int(selector.get("window_hours") or 24))
     prompt_version = int(config.input.get("prompt_version") or 1)
-    now = deps.now()
-    since = now - window
+    since = deps.now() - window
 
     rows = deps.raw_items.select_published_since(sub_source_types, since)
     roots = deps.raw_items.select_by_ids(missing_root_ids(rows))
     posts = build_posts([*rows, *roots])
-    llm = deps.llm(config.input.get("llm") or {}) if posts else None
 
     posts_table = deps.table(POSTS_TABLE)
     existing = _existing(posts_table, "id", [p.id for p in posts])
+    llm = None
     post_rows: list[dict[str, Any]] = []
-    translated = reused = 0
+    translated = reused = skipped = 0
+    errors: list[str] = []
     for post in posts:
         before = existing.get(post.id)
         if before and before.get("content_hash") == post.content_hash and int(before.get("prompt_version") or 0) == prompt_version:
-            text_zh = str(before["text_zh"])
+            text_zh = str(before.get("text_zh") or "")
             reused += 1
+        elif not needs_translation(post.text_original, post.langs):
+            text_zh = ""
+            skipped += 1
         else:
-            text_zh = _clean(llm.complete(TRANSLATE_SYSTEM, post.text_original, max_tokens=2000))
+            if llm is None:
+                llm = deps.llm(config.input.get("llm") or {})  # a missing key fails the whole run here
+            try:
+                text_zh = _clean(llm.complete(TRANSLATE_SYSTEM, post.text_original, max_tokens=2000))
+            except Exception as exc:  # one bad post must not hold back the others
+                errors.append(f"{post.url}: {exc.__class__.__name__}: {exc}")
+                continue
             translated += 1
         post_rows.append({
             "id": post.id,
             "raw_item_ids": post.raw_item_ids,
             "author": post.author,
+            "display_name": post.display_name,
+            "avatar_url": post.avatar_url,
             "published_at": post.published_at.isoformat(),
             "updated_at": post.updated_at.isoformat(),
             "url": post.url,
@@ -199,51 +229,18 @@ def run_feed_digest(config: PipelineConfig, deps: Deps) -> dict[str, Any]:
     if post_rows:
         posts_table.upsert(post_rows, on_conflict="id")
 
-    # One summary per author with posts in the window, from the translations.
-    by_author: dict[str, list[tuple[Post, str]]] = {}
-    zh = {row["id"]: row["text_zh"] for row in post_rows}
-    for post in posts:
-        if post.updated_at >= since:
-            by_author.setdefault(post.author, []).append((post, zh[post.id]))
-    authors_table = deps.table(AUTHORS_TABLE)
-    existing_authors = _existing(authors_table, "author", sorted(by_author))
-    author_rows: list[dict[str, Any]] = []
-    digested = digest_reused = 0
-    for author, items in sorted(by_author.items()):
-        items.sort(key=lambda pair: pair[0].updated_at, reverse=True)
-        shown = items[:MAX_DIGEST_POSTS]
-        digest_hash = _sha256(json.dumps([prompt_version, [(p.id, p.content_hash) for p, _ in shown]]))
-        before = existing_authors.get(author)
-        if before and before.get("digest_input_hash") == digest_hash and before.get("digest_zh"):
-            digest = str(before["digest_zh"])
-            digest_reused += 1
-        else:
-            body = "\n\n".join(f"[{p.updated_at.strftime('%m-%d %H:%M')} UTC] {text}" for p, text in shown)
-            digest = _clean(llm.complete(DIGEST_SYSTEM, f"博主：@{author}\n\n{body}", max_tokens=300))
-            digested += 1
-        newest = items[0][0]
-        author_rows.append({
-            "author": author,
-            "display_name": newest.display_name,
-            "avatar_url": newest.avatar_url,
-            "digest_zh": digest,
-            "digest_input_hash": digest_hash,
-            "latest_at": newest.updated_at.isoformat(),
-            "digest_window_end": now.isoformat(),
-            "post_count": len(items),
-        })
-    if author_rows:
-        authors_table.upsert(author_rows, on_conflict="author")
-
-    return {
+    summary = {
         "window_start": since.isoformat(),
         "raw_items": len(rows),
         "thread_roots_fetched": len(roots),
         "posts": len(posts),
         "translated": translated,
         "translations_reused": reused,
-        "authors": len(author_rows),
-        "digests_generated": digested,
-        "digests_reused": digest_reused,
+        "no_translation_needed": skipped,
+        "failed": len(errors),
         "llm": llm.usage.to_dict() if llm is not None else {"calls": 0},
     }
+    if errors:
+        summary["errors"] = errors[:20]
+        raise PipelineIncomplete(f"{len(errors)} of {len(posts)} posts failed to translate; the rest were saved", summary, partial=bool(post_rows))
+    return summary
