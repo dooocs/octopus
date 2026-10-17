@@ -75,7 +75,7 @@ jobs:
           fi
           python -m scripts.global_scrape "${args[@]}"
 
-      - name: Process the feed (translation and author summaries)
+      - name: Process the feed (translation)
         # Reads the last 24 hours of raw_items, so a failed hour is repaired by
         # the next run. A no-op while the feed_digest pipeline is disabled.
         if: github.event_name == 'schedule' || inputs.write_rds
@@ -84,6 +84,27 @@ jobs:
             python -m scripts.run_pipeline feed_digest --include-disabled
           else
             python -m scripts.run_pipeline feed_digest
+          fi
+
+      - name: Tell ahaIndex2 to publish /feed
+        # Feed Deploy in ahaIndex2 rebuilds and uploads only /feed. Without
+        # GH_PAT (a token that may dispatch to ahaIndex2) its hourly schedule
+        # still publishes, a little later.
+        if: github.event_name == 'schedule' || inputs.write_rds
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
+        run: |
+          if [[ -z "$GH_PAT" ]]; then
+            echo "::warning::GH_PAT is not set: ahaIndex2 publishes /feed on its own schedule instead"
+            exit 0
+          fi
+          code=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GH_PAT" \
+            https://api.github.com/repos/dooocs/ahaIndex2/dispatches \
+            -d '{"event_type":"feed-updated"}')
+          if [[ "$code" != "204" ]]; then
+            echo "::warning::feed-updated dispatch to ahaIndex2 failed (HTTP $code); its schedule will publish /feed"
           fi
 
       - name: Upload the collected rows
