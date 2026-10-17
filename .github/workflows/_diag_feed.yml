@@ -1,0 +1,25 @@
+name: TMP Feed Diagnose
+on:
+  push:
+    branches: [claude/tmp-feed-diagnose]
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: |
+          note() { printf '::notice title=%s::%s\n' "$1" "$(printf '%s' "$2" | sed ':a;N;$!ba;s/%/%25/g;s/\n/%0A/g')"; }
+          S=https://www.amazingindex.com
+          for u in /feed /feed/ /; do note "status $u" "$(curl -s -o /dev/null -w '%{http_code} %{content_type} %{size_download}B' "$S$u?cb=$RANDOM")"; done
+          curl -s "$S/feed/?cb=$RANDOM" -o feed.html
+          note "feed content" "title: $(grep -o '<title>[^<]*' feed.html | head -1)
+          authors: $(grep -o '<article class="feed-author" id="[^"]*"' feed.html | sed 's/.*id="//;s/"//' | tr '\n' ' ')
+          posts: $(grep -c 'class="feed-post"' feed.html || true)  zh: $(grep -o 'class="feed-text feed-zh"' feed.html | wc -l)  media: $(grep -o '<div class="feed-media' feed.html | wc -l)
+          meta: $(grep -o '最新 <time[^<]*<[^<]*' feed.html | sed 's/<[^>]*>//g' | head -1)
+          nav active: $(grep -o '<a href="/feed" class="nav-tab[^"]*"' feed.html | head -1)
+          tco left: $(grep -c 't\.co/' feed.html || true)"
+          imgs=$(grep -o 'src="https://www.amazingindex.com/media/x/[^"]*"' feed.html | sed 's/src="//;s/"//' | sort -u)
+          ok=0; bad=""; for i in $imgs; do c=$(curl -s -o /dev/null -w '%{http_code}' "$i"); [[ $c == 200 ]] && ok=$((ok+1)) || bad="$bad $c:$i"; done
+          note "images" "ok=$ok of $(echo "$imgs" | grep -c .) $bad"
+          curl -s "$S/?cb=$RANDOM" | grep -o '<div class="nav-tabs">.*' | head -c 600 > nav.txt; note "homepage nav" "$(grep -o '>[^<>]*</a>' nav.txt | tr '\n' ' ')"
+          note "sitemap has /feed" "$(curl -s $S/sitemap-pages.xml | grep -c '/feed<' || true) $(curl -s -o /dev/null -w '%{http_code}' $S/sitemap-pages.xml)"
