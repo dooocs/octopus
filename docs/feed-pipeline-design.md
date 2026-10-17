@@ -214,20 +214,22 @@ create index on public.proc_feed_posts (author, updated_at desc);
 - 新增「加工流程」页签：列出各个流程、读取哪些数据（选择器）、硬依赖哪些采集配置、最近几次运行的状态和成本，可以启用或停用。
 - 采集配置的停用和删除按上一节的规则执行，并显示「被哪些流程引用」。
 
-## 8. 发布（ahaIndex2，另开 PR）
+## 8. 发布（ahaIndex2）
 
-- 新建独立的 workflow `feed-deploy.yml`，由 `feed-updated` 触发，并发组 `feed-deploy`，不和日报的生产部署组共用。
-- 读取 24 小时内的 `proc_feed_posts`，按 `author` 分组成卡片（卡片按各自最新一条的 `updated_at` 倒序），每条帖子原文在上、`text_zh` 在下（为空则只显示原文），渲染 `/feed`：内容直接写进 HTML（和归档页一样用 shell + `fillSlots`），同时生成 `/data/feed.json`。
-- 只上传 `/feed` 页面、它的无斜杠副本、`data/feed.json`，以及有变化的 `_astro` 资源，然后只刷新这几个 CDN 地址。发布前检查页面引用的图片都已经在 OSS 上。
-- 全量构建的清理逻辑排除 `data/feed.json`。导航在「AI 日报」和「专题」之间加「动态」；旧的日报页需要跑一次全量构建，才会显示新导航。
-- SEO：只有 `/feed` 这一个聚合页，不给每条推文单独生成页面。
+2026-10-17 实现时调整：`/feed` 是普通的 Astro 静态页（`src/pages/feed.astro`），构建时读 `proc_feed_posts` 直接渲染，而不是 shell + `fillSlots`（`fillSlots` 不能对已经填过的页面再填一次，每小时更新做不了）。
+
+- 新 workflow `feed-deploy.yml`：由 Feed Collect 结束时的 `repository_dispatch: feed-updated` 触发（需要 octopus 有 `GH_PAT`），另有北京时间 06:40–01:40 每小时一次的定时兜底。独立并发组 `feed-deploy`，不会挤掉排队中的日报部署。
+- `run-deploy.sh` 的 `feed` 模式：`BUILD_MODE=feed` 构建（不渲染任何日报、文章、项目页），只上传 `feed/index.html`、它的无斜杠副本和 OSS 上还没有的 `_astro` 资源，只刷新 `/feed` 两个 CDN 地址。日报和全量构建也会顺带重建 `/feed`。
+- 页面：按博主分卡片（卡片按最新一条倒序），每条帖子原文在上、`text_zh` 在下（为空只显示原文），图片和视频封面只用 OSS 上的副本，时间为北京时间。导航在「AI 日报」与「专题」之间；旧的日报页要跑一次全量构建才会出现新导航。
+- 读取权限：`sql/013` 给 anon 开放 `proc_feed_posts` 只读（网站构建可能用 publishable key；内容本来就公开）。
+- SEO：只有 `/feed` 这一个聚合页，进 sitemap，不给每条推文单独生成页面。
 
 ## 9. 实施顺序
 
 1. **PR 1 采集**：修复静默失败；新增 `twitter_feed` 适配器、`media_archive` enricher、游标窗口逻辑；新建 `feed_collect.yml`（先只跑采集）。充值后先用真实数据核对 4.3 里列出的字段。
 2. **PR 2 加工层**：`processing/` 框架；第 6 节的表；`feed_digest` 流程；运行记录和成本统计。
 3. **PR 3 后台**：「加工流程」页签；依赖检查；停用和归档。
-4. **PR 4 ahaIndex2**：`/feed` 页面、独立发布流程、导航 tab。
+4. **PR 4 ahaIndex2**：`/feed` 页面、独立发布流程、导航 tab；octopus 加工完成后发 `feed-updated`。
 5. 之后：把日报的打分、摘要、排序逐个从 sync 迁到加工层，每迁一个就关掉 sync 里对应的那一段。
 
 ## 10. 成本估算
