@@ -15,8 +15,8 @@
 | 抓取时间 | 北京时间 06:00 到次日 01:00 每小时一次（每天 20 次），01:00–06:00 不抓；06:00 那次补抓 01:00–06:00 |
 | 抓取范围 | 只要原创：排除转推、回复他人、引用推；博主自己连发的长 thread 保留并合并 |
 | 存储 | 文字落库，图片全部转存 OSS（视频只存封面） |
-| 加工 | 必须 AI 加工：中文翻译 + 每个博主一句「最近 24 小时在聊什么」 |
-| 展示 | 只展示滚动 24 小时；按博主合并成卡片，卡片按该博主最新一条的时间倒序；导航位置在「AI 日报」与「专题」之间 |
+| 加工 | 必须 AI 加工：只做中文翻译（2026-10-17 去掉了博主 24 小时摘要） |
+| 展示 | 只展示滚动 24 小时；按博主合并成卡片，卡片按该博主最新一条的时间倒序；每条帖子先显示原文，下方显示中文译文（`text_zh` 为空则只显示原文）；导航位置在「AI 日报」与「专题」之间 |
 | 代码归属 | 采集和加工都在 Octopus；展示和发布在 ahaIndex2 |
 
 ## 2. 现状（2026-10-16 核对）
@@ -33,7 +33,7 @@
 ```text
 采集层 crawler/          加工层 processing/                 发布 (ahaIndex2)
 discover→prune→enrich    读 raw_items                       读加工产出
-→normalize               → 线程合并 → 翻译 → 博主摘要         → 渲染 /feed
+→normalize               → 线程合并 → 翻译                    → 渲染 /feed
 写 raw_items (RDS)       写加工产出表 (Supabase)             → 只上传 /feed 相关文件
 图片 → OSS media/        记录 run / 成本                      → 刷新 CDN
 ```
@@ -149,9 +149,8 @@ load pipeline config → select inputs → steps… → write outputs → record
 | --- | --- |
 | select | 读取 `x_feed_accounts`、发布时间在最近 24 小时内的 `raw_items` |
 | thread_merge | 按 `conversation_id` 合并同一作者的 thread，以第一条的时间为准 |
-| translate | 每条或每个 thread 生成忠实的中文翻译（Kimi，沿用现有 `KIMI_API_KEY`），保留原文 |
-| author_digest | 只为本次有新内容的博主重新生成一句「最近 24 小时在聊什么」 |
-| write | 写入下面两张产出表；超出 24 小时的数据保留在表里，只是不再展示 |
+| translate | 每条或每个 thread 生成忠实的中文翻译（Kimi，`KIMI_API_KEY`），段落与原文一一对应，保留原文。原文已是中文、或去掉链接和 @ 后没有文字的帖子不调用模型，`text_zh` 存空串 |
+| write | 写入 `proc_feed_posts`（带博主昵称和头像）；单条翻译失败不影响其他帖子，失败的这条不写入、下次重试，本次运行记为 partial 并让 workflow 失败；超出 24 小时的数据保留在表里，只是不再展示 |
 | notify | 有变化时向 ahaIndex2 发送 `repository_dispatch: feed-updated` |
 
 ## 6. 表结构（Supabase「aha index」）
@@ -186,33 +185,25 @@ create table public.octp_pipeline_runs (
   error_message text
 );
 
--- 动态产出：一条推文或一个 thread 一行
+-- 动态产出：一条推文或一个 thread 一行（博主卡片由网站按 author 分组得到）
 create table public.proc_feed_posts (
   id text primary key,                     -- thread 第一条的 raw_item id
   raw_item_ids text[] not null,
   author text not null,                    -- X handle
+  display_name text,                       -- 博主昵称（取 thread 最新一条）
+  avatar_url text,                         -- 头像（OSS）
   published_at timestamptz not null,       -- thread 第一条的时间
   updated_at timestamptz not null,         -- thread 最后一条的时间
   url text not null,
   text_original text not null,
-  text_zh text not null,
+  text_zh text not null,                   -- '' = 无需翻译，只显示原文
   media jsonb not null default '[]'::jsonb,
+  content_hash text not null,
   prompt_version int not null,
   created_date timestamptz not null default now(),
   updated_date timestamptz not null default now()
 );
-create index on public.proc_feed_posts (published_at desc);
-
--- 动态产出：每个博主一行
-create table public.proc_feed_authors (
-  author text primary key,
-  display_name text not null,
-  avatar_url text,
-  digest_zh text,
-  latest_at timestamptz,                   -- 卡片排序依据
-  digest_window_end timestamptz,
-  updated_date timestamptz not null default now()
-);
+create index on public.proc_feed_posts (author, updated_at desc);
 ```
 
 采集配置改为默认停用，而不是删除：`octp_scraper_configs` 增加 `archived_at timestamptz`。后台的「删除」先检查 `octp_pipeline_sources` 里有没有引用：有引用就提示「被 X 流程引用」，只允许停用；没有引用才允许归档。
@@ -226,7 +217,7 @@ create table public.proc_feed_authors (
 ## 8. 发布（ahaIndex2，另开 PR）
 
 - 新建独立的 workflow `feed-deploy.yml`，由 `feed-updated` 触发，并发组 `feed-deploy`，不和日报的生产部署组共用。
-- 读取 `proc_feed_authors`，以及 24 小时内的 `proc_feed_posts`，渲染 `/feed`：内容直接写进 HTML（和归档页一样用 shell + `fillSlots`），同时生成 `/data/feed.json`。
+- 读取 24 小时内的 `proc_feed_posts`，按 `author` 分组成卡片（卡片按各自最新一条的 `updated_at` 倒序），每条帖子原文在上、`text_zh` 在下（为空则只显示原文），渲染 `/feed`：内容直接写进 HTML（和归档页一样用 shell + `fillSlots`），同时生成 `/data/feed.json`。
 - 只上传 `/feed` 页面、它的无斜杠副本、`data/feed.json`，以及有变化的 `_astro` 资源，然后只刷新这几个 CDN 地址。发布前检查页面引用的图片都已经在 OSS 上。
 - 全量构建的清理逻辑排除 `data/feed.json`。导航在「AI 日报」和「专题」之间加「动态」；旧的日报页需要跑一次全量构建，才会显示新导航。
 - SEO：只有 `/feed` 这一个聚合页，不给每条推文单独生成页面。
@@ -244,5 +235,5 @@ create table public.proc_feed_authors (
 | 项 | 估算 |
 | --- | --- |
 | twitterapi.io | 每月几美元：每天 20 次 × 1～2 个请求，加上返回的原创推文，以及服务端过滤不掉的回复 |
-| Kimi 翻译和摘要 | 只处理新内容，按每天约 100～200 条推文估算，量级很小（以实际 token 统计为准） |
+| Kimi 翻译 | 只处理新内容，按每天约 100～200 条推文估算，量级很小（以实际 token 统计为准） |
 | OSS 和 CDN | 图片按内容去重，量级很小 |

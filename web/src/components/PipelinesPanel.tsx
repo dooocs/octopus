@@ -49,7 +49,8 @@ function summaryText(summary: Record<string, JsonValue>) {
   pick('posts', '帖子')
   pick('translated', '新翻译')
   pick('translations_reused', '复用')
-  pick('digests_generated', '新摘要')
+  pick('no_translation_needed', '无需翻译')
+  if (typeof summary.failed === 'number' && summary.failed > 0) parts.push(`失败 ${summary.failed}`)
   const llm = asObject(summary.llm)
   if (typeof llm.prompt_tokens === 'number') {
     parts.push(`tokens ${llm.prompt_tokens}+${typeof llm.completion_tokens === 'number' ? llm.completion_tokens : 0}`)

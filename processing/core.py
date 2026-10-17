@@ -16,6 +16,16 @@ PIPELINES_TABLE = "octp_pipelines"
 PIPELINE_RUNS_TABLE = "octp_pipeline_runs"
 
 
+class PipelineIncomplete(RuntimeError):
+    """Some items failed but the rest were written: the run is recorded as partial (or
+    failed when nothing succeeded) with its summary, and the error still propagates."""
+
+    def __init__(self, message: str, summary: dict[str, Any], *, partial: bool) -> None:
+        super().__init__(message)
+        self.summary = summary
+        self.partial = partial
+
+
 class RawItemSource(Protocol):
     def select_published_since(self, sub_source_types: Sequence[str], since: datetime) -> list[dict[str, Any]]: ...
 
@@ -110,6 +120,15 @@ def run_pipeline(slug: str, deps: Deps, *, include_disabled: bool = False) -> di
     run_filter = {"id": f"eq.{run['id']}"} if run.get("id") else None
     try:
         summary = fn(config, deps)
+    except PipelineIncomplete as exc:
+        if run_filter:
+            runs.update(run_filter, {
+                "status": "partial" if exc.partial else "failed",
+                "finished_at": deps.now().isoformat(),
+                "summary": exc.summary,
+                "error_message": str(exc)[:2000],
+            })
+        raise
     except Exception as exc:
         if run_filter:
             runs.update(run_filter, {
