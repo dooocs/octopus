@@ -5,21 +5,20 @@ on:
 jobs:
   diag:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 8
+    env:
+      OSS_ACCESS_KEY_ID: ${{ secrets.OSS_ACCESS_KEY_ID }}
+      OSS_ACCESS_KEY_SECRET: ${{ secrets.OSS_ACCESS_KEY_SECRET }}
     steps:
       - run: |
           note() { printf '::notice title=%s::%s\n' "$1" "$(printf '%s' "$2" | sed ':a;N;$!ba;s/%/%25/g;s/\n/%0A/g')"; }
+          curl -sLo o.zip https://gosspublic.alicdn.com/ossutil/v2/2.2.1/ossutil-2.2.1-linux-amd64.zip && unzip -q o.zip && O=./ossutil-2.2.1-linux-amd64/ossutil
+          C=(--endpoint https://oss-cn-hangzhou.aliyuncs.com --access-key-id "$OSS_ACCESS_KEY_ID" --access-key-secret "$OSS_ACCESS_KEY_SECRET" --region cn-hangzhou)
+          note "oss ls feed" "$($O ls oss://amazingindex/feed "${C[@]}" 2>&1 | tail -6)"
+          note "oss ls about" "$($O ls oss://amazingindex/about "${C[@]}" 2>&1 | tail -5)"
+          $O cp oss://amazingindex/feed/index.html feed-oss.html "${C[@]}" -f >/dev/null 2>&1
+          note "oss feed/index.html" "size=$(wc -c < feed-oss.html 2>/dev/null) title=$(grep -o '<title>[^<]*' feed-oss.html | head -1) posts=$(grep -c 'class="feed-post"' feed-oss.html)"
+          H() { curl -s -D - -o /dev/null "$1" | grep -iE '^(HTTP|content-length|x-cache|age|last-modified|via|x-oss-request|x-swift|location|eagleid)' | tr -d '\r'; }
           S=https://www.amazingindex.com
-          for u in /feed /feed/ /; do note "status $u" "$(curl -s -o /dev/null -w '%{http_code} %{content_type} %{size_download}B' "$S$u?cb=$RANDOM")"; done
-          curl -s "$S/feed/?cb=$RANDOM" -o feed.html
-          note "feed content" "title: $(grep -o '<title>[^<]*' feed.html | head -1)
-          authors: $(grep -o '<article class="feed-author" id="[^"]*"' feed.html | sed 's/.*id="//;s/"//' | tr '\n' ' ')
-          posts: $(grep -c 'class="feed-post"' feed.html || true)  zh: $(grep -o 'class="feed-text feed-zh"' feed.html | wc -l)  media: $(grep -o '<div class="feed-media' feed.html | wc -l)
-          meta: $(grep -o '最新 <time[^<]*<[^<]*' feed.html | sed 's/<[^>]*>//g' | head -1)
-          nav active: $(grep -o '<a href="/feed" class="nav-tab[^"]*"' feed.html | head -1)
-          tco left: $(grep -c 't\.co/' feed.html || true)"
-          imgs=$(grep -o 'src="https://www.amazingindex.com/media/x/[^"]*"' feed.html | sed 's/src="//;s/"//' | sort -u)
-          ok=0; bad=""; for i in $imgs; do c=$(curl -s -o /dev/null -w '%{http_code}' "$i"); [[ $c == 200 ]] && ok=$((ok+1)) || bad="$bad $c:$i"; done
-          note "images" "ok=$ok of $(echo "$imgs" | grep -c .) $bad"
-          curl -s "$S/?cb=$RANDOM" | grep -o '<div class="nav-tabs">.*' | head -c 600 > nav.txt; note "homepage nav" "$(grep -o '>[^<>]*</a>' nav.txt | tr '\n' ' ')"
-          note "sitemap has /feed" "$(curl -s $S/sitemap-pages.xml | grep -c '/feed<' || true) $(curl -s -o /dev/null -w '%{http_code}' $S/sitemap-pages.xml)"
+          for u in /feed/ /feed /about/ /about /subjects/ /daily/; do note "cdn $u" "$(H "$S$u")"; done
+          note "oss-website feed/" "$(H http://amazingindex.oss-cn-hangzhou.aliyuncs.com/feed/index.html)"
