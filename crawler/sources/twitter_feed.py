@@ -14,10 +14,16 @@ Design: docs/feed-pipeline-design.md §4.
   Dropped: retweets, quote posts, replies to other accounts. Each tweet is its
   own raw_item; threads are merged by the processing layer from
   context_content.thread.
+- Text: t.co links are resolved before storing (clean_text): the link X
+  appends for the tweet's own photo/video is removed (the media itself is in
+  context_content.media and archived to OSS), every other t.co link becomes
+  its expanded URL. displayTextRange is not used: it ends at ~280 characters
+  on long posts.
 """
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -105,6 +111,36 @@ def classify(raw: dict[str, Any]) -> str:
         reply_to = str(raw.get("inReplyToUserId") or "")
         return KIND_THREAD if reply_to and reply_to == author_id else KIND_REPLY
     return KIND_ORIGINAL
+
+
+_TRAILING_SPACE = re.compile(r"[ \t]+(?=\n|$)")
+_EXTRA_BLANK_LINES = re.compile(r"\n{3,}")
+
+
+def clean_text(raw: dict[str, Any]) -> tuple[str, list[dict[str, str]]]:
+    """Tweet text with t.co resolved, and the links it contains.
+
+    Returns (text, links): links are [{"url": expanded, "display_url": …}] in
+    order of appearance, for the site to label long URLs.
+    """
+    text = str(raw.get("text") or "")
+    container = raw.get("extendedEntities") or raw.get("extended_entities") or {}
+    for item in (container.get("media") if isinstance(container, dict) else None) or []:
+        if isinstance(item, dict) and item.get("url"):
+            text = text.replace(str(item["url"]), "")
+    links: list[dict[str, str]] = []
+    entities = raw.get("entities") or {}
+    for item in (entities.get("urls") if isinstance(entities, dict) else None) or []:
+        if not isinstance(item, dict):
+            continue
+        short, expanded = str(item.get("url") or ""), str(item.get("expanded_url") or "")
+        if not short or not expanded:
+            continue
+        if short in text:
+            text = text.replace(short, expanded)
+            links.append({"url": expanded, "display_url": str(item.get("display_url") or expanded)})
+    text = _EXTRA_BLANK_LINES.sub("\n\n", _TRAILING_SPACE.sub("", text)).strip()
+    return text, links
 
 
 def _normalize_handle(value: str) -> str:
@@ -246,7 +282,7 @@ class TwitterFeedAdapter(SourceAdapterBase):
         if _normalize_handle(handle) not in watched:
             return None  # a search hit from an account we do not watch
         tweet_id = str(raw["id"])
-        text = str(raw.get("text") or "")
+        text, links = clean_text(raw)
         kind = classify(raw)
         conversation_id = str(raw.get("conversationId") or tweet_id)
         url = f"https://x.com/{handle}/status/{tweet_id}"
@@ -272,6 +308,7 @@ class TwitterFeedAdapter(SourceAdapterBase):
                     {"type": m.type, "source_url": m.url, "width": m.width, "height": m.height}
                     for m in media_of(raw)
                 ],
+                "links": links,
             },
             extra={
                 "tweet_id": tweet_id,

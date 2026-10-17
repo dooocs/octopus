@@ -21,6 +21,7 @@ from crawler.sources.twitter_feed import (
     account_batches,
     build_query,
     classify,
+    clean_text,
     fetch_window,
 )
 from crawler.sources.twitterapi_io import TwitterApiError, check_response, media_of
@@ -125,6 +126,30 @@ class ClassifyTest(unittest.TestCase):
         ])
 
 
+class CleanTextTest(unittest.TestCase):
+    """Shapes copied from live twitterapi.io responses (2026-10-17)."""
+
+    def test_own_media_link_is_removed_and_links_are_expanded(self) -> None:
+        raw = {
+            "text": "Gemini 4 Argon sets a new record.\n\nDetails: https://t.co/aaa https://t.co/med",
+            "entities": {"urls": [{"url": "https://t.co/aaa", "expanded_url": "https://blog.example.com/argon", "display_url": "blog.example.com/argon"}]},
+            "extendedEntities": {"media": [{"url": "https://t.co/med", "type": "photo", "media_url_https": "https://pbs.twimg.com/media/x.jpg"}]},
+        }
+        text, links = clean_text(raw)
+        self.assertEqual(text, "Gemini 4 Argon sets a new record.\n\nDetails: https://blog.example.com/argon")
+        self.assertEqual(links, [{"url": "https://blog.example.com/argon", "display_url": "blog.example.com/argon"}])
+
+    def test_long_posts_are_not_cut_at_display_text_range(self) -> None:
+        body = "x" * 700
+        raw = {"text": f"{body} https://t.co/vid", "displayTextRange": [0, 275],
+               "extendedEntities": {"media": [{"url": "https://t.co/vid", "type": "video"}]}}
+        self.assertEqual(clean_text(raw)[0], body)
+
+    def test_media_only_post_has_empty_text_and_unknown_tco_is_kept(self) -> None:
+        self.assertEqual(clean_text({"text": "https://t.co/med", "extendedEntities": {"media": [{"url": "https://t.co/med"}]}}), ("", []))
+        self.assertEqual(clean_text({"text": "see https://t.co/zzz"})[0], "see https://t.co/zzz")
+
+
 class _Api:
     """httpx transport standing in for twitterapi.io."""
 
@@ -160,8 +185,10 @@ class FeedRunTest(unittest.TestCase):
     def test_keeps_originals_and_own_threads_across_pages(self) -> None:
         pages = [
             {"status": "success", "tweets": [
-                _tweet("100", "karpathy", "1", text="new model notes", extendedEntities={"media": [
-                    {"type": "photo", "media_url_https": "https://pbs.twimg.com/media/a.jpg"}]}),
+                _tweet("100", "karpathy", "1", text="new model notes https://t.co/lnk https://t.co/pic",
+                       entities={"urls": [{"url": "https://t.co/lnk", "expanded_url": "https://karpathy.ai/notes", "display_url": "karpathy.ai/notes"}]},
+                       extendedEntities={"media": [
+                    {"type": "photo", "url": "https://t.co/pic", "media_url_https": "https://pbs.twimg.com/media/a.jpg"}]}),
                 _tweet("101", "karpathy", "1", text="2/ more", isReply=True, inReplyToId="100", inReplyToUserId="1", conversationId="100"),
                 _tweet("102", "sama", "2", text="RT @x: hi", retweeted_tweet={"id": "5"}),
             ], "has_next_page": True, "next_cursor": "1"},
@@ -183,6 +210,9 @@ class FeedRunTest(unittest.TestCase):
         root = next(r for r in result.rows if r["extra"]["tweet_id"] == "100")
         self.assertTrue(root["context_content"]["thread"]["is_root"])
         self.assertEqual(root["context_content"]["media"][0]["source_url"], "https://pbs.twimg.com/media/a.jpg")
+        self.assertEqual(root["content"], "new model notes https://karpathy.ai/notes", "t.co resolved, own photo link removed")
+        self.assertEqual(root["title"], "new model notes https://karpathy.ai/notes")
+        self.assertEqual(root["context_content"]["links"], [{"url": "https://karpathy.ai/notes", "display_url": "karpathy.ai/notes"}])
         self.assertEqual(root["url"], "https://x.com/karpathy/status/100")
         self.assertEqual(root["author_id"], "karpathy")
         self.assertEqual(root["sub_source_type"], "x_feed_accounts")
