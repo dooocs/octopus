@@ -86,3 +86,64 @@ class InfraBoundaryTest(unittest.TestCase):
         self.assertFalse((repo_root / "infra" / "oss.py").exists())
         self.assertTrue((repo_root / "infra" / "gateways" / "http_transport.py").exists())
         self.assertTrue((repo_root / "infra" / "gateways" / "oss.py").exists())
+
+
+class ArchiveVideoTest(unittest.TestCase):
+    class _Bucket:
+        def __init__(self, existing=()):
+            self.existing = set(existing)
+            self.uploads: list[tuple[str, int, dict]] = []
+
+        def object_exists(self, key):
+            return key in self.existing
+
+        def put_object_from_file(self, key, path, headers=None):
+            import os as _os
+            self.uploads.append((key, _os.path.getsize(path), headers or {}))
+
+    class _Stream:
+        def __init__(self, chunks, headers=None, status=200):
+            self.status_code = status
+            self.headers = headers or {"Content-Type": "video/mp4"}
+            self._chunks = chunks
+            self.closed = False
+
+        def iter_content(self, chunk_size=0):
+            yield from self._chunks
+
+        def close(self):
+            self.closed = True
+
+    def _run(self, bucket, stream, **kwargs):
+        from unittest.mock import patch
+        from infra.gateways import oss
+
+        with patch.object(oss, "_get_bucket", return_value=bucket), patch.object(oss, "http_get", return_value=stream) as get:
+            return oss.archive_video("https://video.twimg.com/a.mp4", "media/x/video/k.mp4", **kwargs), get
+
+    def test_existing_object_is_not_downloaded(self) -> None:
+        bucket = self._Bucket(existing={"media/x/video/k.mp4"})
+        result, get = self._run(bucket, self._Stream([]))
+        self.assertEqual(result["url"], "https://www.amazingindex.com/media/x/video/k.mp4")
+        get.assert_not_called()
+
+    def test_upload_and_size_cap(self) -> None:
+        bucket = self._Bucket()
+        result, _ = self._run(bucket, self._Stream([b"x" * 3000]))
+        self.assertEqual(result, {"url": "https://www.amazingindex.com/media/x/video/k.mp4", "key": "media/x/video/k.mp4", "bytes": 3000})
+        self.assertEqual(bucket.uploads[0][:2], ("media/x/video/k.mp4", 3000))
+        self.assertEqual(bucket.uploads[0][2]["Content-Type"], "video/mp4")
+
+        bucket = self._Bucket()
+        result, _ = self._run(bucket, self._Stream([b"x" * 3000] * 3), max_bytes=5000)
+        self.assertTrue(result["too_large"])
+        self.assertEqual(bucket.uploads, [])
+
+        result, _ = self._run(self._Bucket(), self._Stream([], headers={"Content-Type": "video/mp4", "Content-Length": "999999"}), max_bytes=5000)
+        self.assertTrue(result["too_large"])
+
+    def test_failures_return_none(self) -> None:
+        result, _ = self._run(self._Bucket(), self._Stream([], status=403))
+        self.assertIsNone(result)
+        result, _ = self._run(self._Bucket(), self._Stream([b"<html>" * 400], headers={"Content-Type": "text/html"}))
+        self.assertIsNone(result)
