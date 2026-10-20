@@ -63,7 +63,10 @@ jobs:
         run: |
           args=(--days "${{ inputs.days }}" --inspect)
           if [[ "${{ inputs.dry_run }}" == "true" ]]; then args+=(--dry-run); fi
-          python -m scripts.backfill_feed_media "${args[@]}"
+          set -o pipefail
+          python -m scripts.backfill_feed_media "${args[@]}" | tee backfill.log
+          # The results as annotations, readable through the API without the log.
+          grep -E '^(feed rows|rows of|looked up|videos:|would update|updated|sample media)' backfill.log | head -8 | sed 's/^/::notice::/' || true
 
       - name: Re-run feed_digest
         if: ${{ !inputs.dry_run }}
