@@ -195,6 +195,77 @@ def archive_media(url: str, prefix: str) -> dict[str, object] | None:
         return None
 
 
+MAX_VIDEO_BYTES = 50 * 1024 * 1024
+VIDEO_DOWNLOAD_TIMEOUT = (CONNECT_TIMEOUT, 120)
+
+
+def media_url(key: str) -> str:
+    return f"https://{OSS_CUSTOM_DOMAIN}/{key}"
+
+
+def archive_video(url: str, key: str, max_bytes: int = MAX_VIDEO_BYTES) -> dict[str, object] | None:
+    """Keep the mp4 at `url` on OSS under `key` (named by the caller, e.g. by media_key).
+
+    An object already at `key` is not downloaded again, so the hourly runs'
+    overlapping windows cost nothing. The download is streamed to a temporary
+    file and stopped as soon as it passes max_bytes.
+
+    Returns {"url", "key", "bytes"} when stored, {"too_large": True, "bytes"}
+    when the video is over the cap (the caller keeps the cover only), or None
+    when OSS is not configured or the download/upload failed.
+    """
+    bucket = _get_bucket()
+    if bucket is None:
+        return None
+    try:
+        if bucket.object_exists(key):
+            return {"url": media_url(key), "key": key, "bytes": None}
+        import tempfile
+
+        resp = http_get(
+            url,
+            timeout=VIDEO_DOWNLOAD_TIMEOUT,
+            stream=True,
+            retries=2,
+            headers={"User-Agent": "Mozilla/5.0 (compatible; MediaFetcher/1.0)"},
+        )
+        try:
+            if resp.status_code != 200:
+                print(f"  Video download failed [{resp.status_code}]: {url[:80]}")
+                return None
+            content_type = (resp.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+            if content_type and not (content_type.startswith("video/") or content_type == "application/octet-stream"):
+                print(f"  Video skipped (content type {content_type}): {url[:80]}")
+                return None
+            declared = int(resp.headers.get("Content-Length") or 0)
+            if declared > max_bytes:
+                return {"too_large": True, "bytes": declared}
+            size = 0
+            with tempfile.NamedTemporaryFile(suffix=".mp4") as tmp:
+                for chunk in resp.iter_content(chunk_size=1024 * 256):
+                    if not chunk:
+                        continue
+                    size += len(chunk)
+                    if size > max_bytes:
+                        return {"too_large": True, "bytes": size}
+                    tmp.write(chunk)
+                tmp.flush()
+                if size < 1000:
+                    print(f"  Video skipped (size {size} bytes): {url[:80]}")
+                    return None
+                bucket.put_object_from_file(
+                    key,
+                    tmp.name,
+                    headers={"Content-Type": "video/mp4", "Cache-Control": "max-age=31536000, immutable"},
+                )
+            return {"url": media_url(key), "key": key, "bytes": size}
+        finally:
+            resp.close()
+    except Exception as e:
+        print(f"  Video archive failed: {url[:80]} | {e}")
+        return None
+
+
 def upload_images_to_oss(urls: list[str], date_str: str | None = None) -> list[str]:
     """Upload a list of image URLs to OSS.
 

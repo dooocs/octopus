@@ -2037,7 +2037,7 @@
       "media_archive"
     ],
     "rate_limit": {},
-    "description": "按时间窗口抓取关注账号的原创推文和自己的 thread（排除转推、引用、回复他人），图片转存 OSS。"
+    "description": "按时间窗口抓取关注账号的原创推文和自己的 thread（排除转推、引用、回复他人），图片和视频转存 OSS，不保存 X 的原始媒体链接。"
   },
   {
     "scraper": "twitter_twscrape",

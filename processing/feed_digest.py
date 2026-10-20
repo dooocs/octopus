@@ -35,6 +35,8 @@ from typing import Any, Iterable
 from processing.core import Deps, PipelineConfig, PipelineIncomplete, register_pipeline
 
 POSTS_TABLE = "proc_feed_posts"
+# url is the image (a video's cover); video_url the archived mp4, when there is one.
+MEDIA_KEYS = ("type", "url", "width", "height", "video_url", "video_too_large", "duration_ms")
 
 # Shown directly below the original, so: faithful, same paragraphs, nothing added.
 TRANSLATE_SYSTEM = (
@@ -135,7 +137,7 @@ def build_posts(rows: Iterable[dict[str, Any]]) -> list[Post]:
         for part in ordered:
             for item in (part.get("context_content") or {}).get("media") or []:
                 if item.get("url"):  # archived to OSS; un-archived sources are not shown
-                    media.append({k: item.get(k) for k in ("type", "url", "width", "height")})
+                    media.append({k: item.get(k) for k in MEDIA_KEYS if item.get(k) is not None or k in ("width", "height")})
         posts.append(Post(
             id=str(root["id"]),
             raw_item_ids=[str(p["id"]) for p in ordered],

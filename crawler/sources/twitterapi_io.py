@@ -10,6 +10,7 @@ and 2026-10 the old behaviour turned an exhausted balance into months of
 from __future__ import annotations
 
 import os
+import re
 import time
 from dataclasses import dataclass
 from datetime import datetime
@@ -109,6 +110,22 @@ class TwitterApiClient:
         raise TwitterApiError(f"twitterapi.io {endpoint} failed after {self._max_attempts} attempts: {last}")
 
 
+TWEETS_BY_IDS_ENDPOINT = "/twitter/tweets"
+MAX_IDS_PER_LOOKUP = 50
+
+
+def tweets_by_ids(client: TwitterApiClient, ids: list[str]) -> dict[str, dict[str, Any]]:
+    """Tweets by id, 50 per request. Deleted or protected tweets are simply absent."""
+    found: dict[str, dict[str, Any]] = {}
+    unique = list(dict.fromkeys(str(i) for i in ids if i))
+    for start in range(0, len(unique), MAX_IDS_PER_LOOKUP):
+        body = client.get(TWEETS_BY_IDS_ENDPOINT, {"tweet_ids": ",".join(unique[start:start + MAX_IDS_PER_LOOKUP])})
+        for raw in body.get("tweets") or []:
+            if isinstance(raw, dict) and raw.get("id"):
+                found[str(raw["id"])] = raw
+    return found
+
+
 def parse_created_at(value: str) -> datetime:
     """twitterapi.io returns RFC 2822 dates ("Thu Oct 16 06:00:00 +0000 2026") or ISO 8601."""
     try:
@@ -123,14 +140,52 @@ class MediaRef:
     url: str  # image URL: the photo itself, or a video's cover
     width: int | None = None
     height: int | None = None
+    key: str | None = None  # X media_key (or id_str): stable per media item
+    video_url: str | None = None  # videos and GIFs: the mp4 to archive (see best_mp4)
+    duration_ms: int | None = None
+
+
+# A video's short side must fit within this ("720p"); portrait videos count too.
+MAX_VIDEO_SHORT_SIDE = 720
+_RESOLUTION = re.compile(r"/(\d{2,5})x(\d{2,5})/")
+
+
+def best_mp4(video_info: Any, max_short_side: int = MAX_VIDEO_SHORT_SIDE) -> str | None:
+    """The mp4 to keep: the highest bitrate whose short side is at most max_short_side.
+
+    X lists several mp4 variants (resolution in the URL path, e.g.
+    /vid/avc1/1280x720/…) plus an HLS playlist, which is skipped. A variant
+    whose resolution is not in the URL counts as fitting (GIFs have a single
+    variant without it). When no variant fits, the smallest bitrate is taken.
+    """
+    variants = video_info.get("variants") if isinstance(video_info, dict) else None
+    mp4s = [
+        v for v in variants or []
+        if isinstance(v, dict)
+        and "mp4" in str(v.get("content_type") or v.get("contentType") or "").lower()
+        and str(v.get("url") or "").startswith("http")
+    ]
+    if not mp4s:
+        return None
+
+    def short_side(v: dict[str, Any]) -> int:
+        match = _RESOLUTION.search(str(v["url"]))
+        return min(int(match[1]), int(match[2])) if match else 0
+
+    def bitrate(v: dict[str, Any]) -> int:
+        return _int_or_none(v.get("bitrate")) or 0
+
+    fitting = [v for v in mp4s if short_side(v) <= max_short_side]
+    chosen = max(fitting, key=bitrate) if fitting else min(mp4s, key=bitrate)
+    return str(chosen["url"])
 
 
 def media_of(raw: dict[str, Any]) -> list[MediaRef]:
-    """Photos and video covers attached to a tweet.
+    """Photos, and videos/GIFs (cover image plus mp4) attached to a tweet.
 
     The documented tweet schema has no media field; responses carry X's
-    `extendedEntities.media` (or `extended_entities`). Read defensively and
-    verify against live data.
+    `extendedEntities.media` (or `extended_entities`), with `video_info` on
+    videos and GIFs. Read defensively and verify against live data.
     """
     container = raw.get("extendedEntities") or raw.get("extended_entities") or {}
     items = container.get("media") if isinstance(container, dict) else None
@@ -144,12 +199,18 @@ def media_of(raw: dict[str, Any]) -> list[MediaRef]:
         if not url or not str(url).startswith("http"):
             continue
         info = item.get("original_info") or {}
+        kind = str(item.get("type") or "photo")
+        video_info = item.get("video_info") or item.get("videoInfo")
+        key = item.get("media_key") or item.get("id_str") or item.get("id")
         refs.append(
             MediaRef(
-                type=str(item.get("type") or "photo"),
+                type=kind,
                 url=str(url),
                 width=_int_or_none(info.get("width")),
                 height=_int_or_none(info.get("height")),
+                key=str(key) if key else None,
+                video_url=best_mp4(video_info) if kind in ("video", "animated_gif") else None,
+                duration_ms=_int_or_none((video_info or {}).get("duration_millis")) if isinstance(video_info, dict) else None,
             )
         )
     return refs

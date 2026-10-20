@@ -14,7 +14,7 @@
 | 博主名单 | 沿用「X AI Leaders」现有的 22 个账号，后台可改 |
 | 抓取时间 | 北京时间 06:00 到次日 01:00 每小时一次（每天 20 次），01:00–06:00 不抓；06:00 那次补抓 01:00–06:00 |
 | 抓取范围 | 只要原创：排除转推、回复他人、引用推；博主自己连发的长 thread 保留并合并 |
-| 存储 | 文字落库，图片全部转存 OSS（视频只存封面） |
+| 存储 | 文字落库，图片、视频和 GIF 全部转存 OSS；不保存 X 的原始媒体链接（2026-10-20） |
 | 加工 | 必须 AI 加工：只做中文翻译（2026-10-17 去掉了博主 24 小时摘要） |
 | 展示 | 只展示滚动 24 小时；按博主合并成卡片，卡片按该博主最新一条的时间倒序；每条帖子先显示原文，下方显示中文译文（`text_zh` 为空则只显示原文）；导航位置在「AI 日报」与「专题」之间 |
 | 代码归属 | 采集和加工都在 Octopus；展示和发布在 ahaIndex2 |
@@ -102,7 +102,9 @@ queryType = Latest，翻页直到 has_next_page = false
 ### 4.4 图片转存（`media_archive` enricher）
 
 - 下载照片和视频封面，以及博主头像。按内容的 sha256 命名，写到 `oss://amazingindex/media/x/<sha256>.<ext>`，通过 `https://www.amazingindex.com/media/x/…` 访问。
-- 写入 `context_content.media = [{ type, url, width, height, source_url }]`；头像写到 `extra.avatar`。
+- 视频和 GIF（2026-10-20）：从 `video_info.variants` 取短边不超过 720 的最高码率 mp4，按 X 的 `media_key` 命名写到 `media/x/video/<media_key>.mp4`；对象已存在就不再下载（每小时窗口有重叠）。单个上限 50MB，超过的只留封面并标 `video_too_large`。
+- 写入 `context_content.media = [{ type, url, key, width, height, video_url?, video_key?, video_too_large?, duration_ms? }]`（`url` 是图片或视频封面）；头像写到 `extra.avatar_url`。
+- **不保存 X 的原始链接**：`source_url`、`video_source_url`、`avatar_source_url` 只在 enrich 期间存在，`normalize` 统一剥掉；没转存成功的媒体直接丢弃。存量数据由 `scripts/backfill_feed_media.py`（workflow「Feed Media Backfill」）清理并补存视频。
 - 内容相同的图片只存一份。单张图片下载失败只记录警告，不让整个任务失败；推文本身照常写入，不带这张图。
 - ahaIndex2 全量构建的清理只覆盖固定的几个前缀，不包含 `media/`，所以这些图片不会被误删。
 

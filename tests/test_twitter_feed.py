@@ -209,7 +209,9 @@ class FeedRunTest(unittest.TestCase):
         self.assertEqual(thread["context_content"]["thread"], {"conversation_id": "100", "is_root": False, "in_reply_to_id": "100"})
         root = next(r for r in result.rows if r["extra"]["tweet_id"] == "100")
         self.assertTrue(root["context_content"]["thread"]["is_root"])
-        self.assertEqual(root["context_content"]["media"][0]["source_url"], "https://pbs.twimg.com/media/a.jpg")
+        # Without media_archive nothing reaches OSS, and X's URLs are never stored.
+        self.assertEqual(root["context_content"]["media"], [])
+        self.assertNotIn("avatar_source_url", root["extra"])
         self.assertEqual(root["content"], "new model notes https://karpathy.ai/notes", "t.co resolved, own photo link removed")
         self.assertEqual(root["title"], "new model notes https://karpathy.ai/notes")
         self.assertEqual(root["context_content"]["links"], [{"url": "https://karpathy.ai/notes", "display_url": "karpathy.ai/notes"}])
@@ -245,9 +247,54 @@ class FeedRunTest(unittest.TestCase):
             result = self._run(_Api(pages), config=_config(enrich=[{"name": "media_archive"}]))
         row = result.rows[0]
         self.assertEqual([m["url"] for m in row["context_content"]["media"]], ["https://www.amazingindex.com/media/x/ok.jpg"])
-        self.assertEqual(row["context_content"]["media"][0]["source_url"], "https://pbs.twimg.com/media/ok.jpg")
+        self.assertNotIn("source_url", row["context_content"]["media"][0])
+        self.assertNotIn("avatar_source_url", row["extra"])
+        self.assertNotIn("twimg", repr(row))
         self.assertEqual(row["extra"]["avatar_url"], "https://www.amazingindex.com/media/x/avatars/karpathy_400x400.jpg")
         self.assertIn(("https://pbs.twimg.com/karpathy_400x400.jpg", "media/x/avatars"), [c.args for c in archive.call_args_list])
+
+    def test_videos_and_gifs_are_archived_by_media_key_with_their_cover(self) -> None:
+        pages = [{"status": "success", "tweets": [
+            _tweet("300", "karpathy", "1", extendedEntities={"media": [
+                {"type": "video", "media_key": "13_111", "media_url_https": "https://pbs.twimg.com/cover1.jpg",
+                 "original_info": {"width": 1920, "height": 1080},
+                 "video_info": {"duration_millis": 30000, "variants": [
+                     {"content_type": "application/x-mpegURL", "url": "https://video.twimg.com/v/pl.m3u8"},
+                     {"content_type": "video/mp4", "bitrate": 832000, "url": "https://video.twimg.com/v/vid/avc1/640x360/a.mp4?tag=12"},
+                     {"content_type": "video/mp4", "bitrate": 2176000, "url": "https://video.twimg.com/v/vid/avc1/1280x720/b.mp4?tag=12"},
+                     {"content_type": "video/mp4", "bitrate": 10368000, "url": "https://video.twimg.com/v/vid/avc1/1920x1080/c.mp4?tag=12"},
+                 ]}},
+                {"type": "animated_gif", "media_key": "16_222", "media_url_https": "https://pbs.twimg.com/cover2.jpg",
+                 "video_info": {"variants": [{"content_type": "video/mp4", "bitrate": 0, "url": "https://video.twimg.com/tweet_video/g.mp4"}]}},
+                {"type": "video", "media_key": "13_333", "media_url_https": "https://pbs.twimg.com/cover3.jpg",
+                 "video_info": {"variants": [{"content_type": "video/mp4", "bitrate": 1, "url": "https://video.twimg.com/v/vid/avc1/720x1280/big.mp4"}]}},
+            ]}),
+        ], "has_next_page": False}]
+
+        def fake_image(url: str, prefix: str):
+            return {"url": f"https://www.amazingindex.com/{prefix}/{url.rsplit('/', 1)[1]}", "key": f"{prefix}/k"}
+
+        def fake_video(url: str, key: str):
+            if "big" in url:
+                return {"too_large": True, "bytes": 99}
+            return {"url": f"https://www.amazingindex.com/{key}", "key": key, "bytes": 5}
+
+        with patch("crawler.sources.twitter_feed.archive_media", side_effect=fake_image), \
+                patch("crawler.sources.twitter_feed.archive_video", side_effect=fake_video) as video:
+            result = self._run(_Api(pages), config=_config(enrich=[{"name": "media_archive"}]))
+        media = result.rows[0]["context_content"]["media"]
+        self.assertEqual([c.args for c in video.call_args_list], [
+            ("https://video.twimg.com/v/vid/avc1/1280x720/b.mp4?tag=12", "media/x/video/13_111.mp4"),
+            ("https://video.twimg.com/tweet_video/g.mp4", "media/x/video/16_222.mp4"),
+            ("https://video.twimg.com/v/vid/avc1/720x1280/big.mp4", "media/x/video/13_333.mp4"),
+        ])
+        self.assertEqual(media[0]["url"], "https://www.amazingindex.com/media/x/cover1.jpg")
+        self.assertEqual(media[0]["video_url"], "https://www.amazingindex.com/media/x/video/13_111.mp4")
+        self.assertEqual(media[0]["duration_ms"], 30000)
+        self.assertEqual(media[1]["video_url"], "https://www.amazingindex.com/media/x/video/16_222.mp4")
+        self.assertTrue(media[2]["video_too_large"])
+        self.assertNotIn("video_url", media[2])
+        self.assertNotIn("twimg", repr(result.rows[0]))
 
     def test_out_of_credits_fails_the_task_instead_of_returning_nothing(self) -> None:
         with self.assertRaisesRegex(TwitterApiError, "out of credits"):
@@ -304,3 +351,57 @@ class DailyTwitterAdapterTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class VideoHelpersTest(unittest.TestCase):
+    def test_best_mp4_prefers_highest_bitrate_within_720p(self) -> None:
+        from crawler.sources.twitterapi_io import best_mp4
+
+        info = {"variants": [
+            {"content_type": "video/mp4", "bitrate": 256000, "url": "https://v/vid/avc1/480x270/a.mp4"},
+            {"content_type": "video/mp4", "bitrate": 2176000, "url": "https://v/vid/avc1/1280x720/b.mp4"},
+            {"content_type": "video/mp4", "bitrate": 10368000, "url": "https://v/vid/avc1/1920x1080/c.mp4"},
+            {"content_type": "application/x-mpegURL", "url": "https://v/pl.m3u8"},
+        ]}
+        self.assertEqual(best_mp4(info), "https://v/vid/avc1/1280x720/b.mp4")
+        portrait = {"variants": [
+            {"content_type": "video/mp4", "bitrate": 2, "url": "https://v/vid/avc1/720x1280/p.mp4"},
+            {"content_type": "video/mp4", "bitrate": 9, "url": "https://v/vid/avc1/1080x1920/q.mp4"},
+        ]}
+        self.assertEqual(best_mp4(portrait), "https://v/vid/avc1/720x1280/p.mp4")
+        only_big = {"variants": [
+            {"content_type": "video/mp4", "bitrate": 9, "url": "https://v/vid/avc1/1920x1080/x.mp4"},
+            {"content_type": "video/mp4", "bitrate": 5, "url": "https://v/vid/avc1/1440x1080/y.mp4"},
+        ]}
+        self.assertEqual(best_mp4(only_big), "https://v/vid/avc1/1440x1080/y.mp4")
+        self.assertIsNone(best_mp4({"variants": [{"content_type": "application/x-mpegURL", "url": "https://v/pl.m3u8"}]}))
+        self.assertIsNone(best_mp4(None))
+
+    def test_strip_x_sources_drops_cdn_urls_and_unarchived_media(self) -> None:
+        from crawler.sources.twitter_feed import strip_x_sources
+
+        context = {"media": [
+            {"type": "photo", "source_url": "https://pbs.twimg.com/a.jpg", "url": "https://www.amazingindex.com/media/x/a.jpg", "key": "media/x/a.jpg", "width": 1, "height": 2},
+            {"type": "photo", "source_url": "https://pbs.twimg.com/b.jpg", "width": None, "height": None},
+        ], "thread": {"conversation_id": "1"}}
+        extra = {"avatar_source_url": "https://pbs.twimg.com/x_400x400.jpg", "avatar_url": "https://www.amazingindex.com/media/x/avatars/x.jpg"}
+        self.assertTrue(strip_x_sources(context, extra))
+        self.assertEqual(context["media"], [{"type": "photo", "url": "https://www.amazingindex.com/media/x/a.jpg", "key": "media/x/a.jpg", "width": 1, "height": 2}])
+        self.assertEqual(extra, {"avatar_url": "https://www.amazingindex.com/media/x/avatars/x.jpg"})
+        self.assertFalse(strip_x_sources(context, extra), "a clean row is unchanged")
+
+    def test_tweets_by_ids_batches_fifty(self) -> None:
+        from crawler.sources.twitterapi_io import TwitterApiClient, tweets_by_ids
+
+        seen: list[str] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            ids = parse_qs(urlparse(str(request.url)).query)["tweet_ids"][0].split(",")
+            seen.append(request.url.path)
+            return httpx.Response(200, json={"status": "success", "tweets": [{"id": i} for i in ids if i != "7"]})
+
+        with TwitterApiClient("k", transport=httpx.MockTransport(handler)) as client:
+            found = tweets_by_ids(client, [str(i) for i in range(120)])
+        self.assertEqual(seen, ["/twitter/tweets"] * 3)
+        self.assertEqual(len(found), 119)
+        self.assertNotIn("7", found)

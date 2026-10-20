@@ -19,11 +19,16 @@ Design: docs/feed-pipeline-design.md §4.
   context_content.media and archived to OSS), every other t.co link becomes
   its expanded URL. displayTextRange is not used: it ends at ~280 characters
   on long posts.
+- Media: photos, video covers, videos/GIFs (an mp4 of at most 720p, up to
+  50MB) and avatars are archived to OSS (media/x/…). X's own URLs are never
+  stored: normalize strips them, and media that failed to archive is dropped.
 """
 
 from __future__ import annotations
 
+import hashlib
 import re
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -37,7 +42,7 @@ from crawler.core.contracts import (
     enrich_enabled,
 )
 from crawler.core.registry import register_adapter
-from infra.gateways.oss import archive_media
+from infra.gateways.oss import OSS_CUSTOM_DOMAIN, archive_media, archive_video
 
 from .spec_helpers import INTEGER, STRING_ARRAY, default_input, input_schema
 from .twitterapi_io import TwitterApiClient, media_of, parse_created_at, require_api_key
@@ -168,7 +173,7 @@ class TwitterFeedAdapter(SourceAdapterBase):
         ),
         required_secrets=["TWITTERAPI_IO_KEY"],
         supported_enrichers=["media_archive"],
-        description="按时间窗口抓取关注账号的原创推文和自己的 thread（排除转推、引用、回复他人），图片转存 OSS。",
+        description="按时间窗口抓取关注账号的原创推文和自己的 thread（排除转推、引用、回复他人），图片和视频转存 OSS，不保存 X 的原始媒体链接。",
     )
 
     # Tests inject an httpx transport here.
@@ -238,17 +243,9 @@ class TwitterFeedAdapter(SourceAdapterBase):
         if not enrich_enabled(config, "media_archive"):
             return records
         avatars: dict[str, dict[str, Any] | None] = {}
-        stored = failed = 0
+        stats = MediaStats()
         for record in records:
-            archived = []
-            for item in record.context_content.get("media", []):
-                result = archive_media(item["source_url"], MEDIA_PREFIX)
-                if result is None:
-                    failed += 1
-                    continue
-                stored += 1
-                archived.append({**item, "url": result["url"], "key": result["key"]})
-            record.context_content["media"] = archived
+            record.context_content["media"] = archive_post_media(record.context_content.get("media", []), stats)
             avatar_source = record.extra.get("avatar_source_url")
             if avatar_source:
                 if avatar_source not in avatars:
@@ -256,10 +253,11 @@ class TwitterFeedAdapter(SourceAdapterBase):
                 avatar = avatars[avatar_source]
                 if avatar:
                     record.extra["avatar_url"] = avatar["url"]
-        print(f"  twitter_feed media: stored={stored} failed={failed} avatars={sum(1 for a in avatars.values() if a)}")
+        print(f"  twitter_feed media: {stats} avatars={sum(1 for a in avatars.values() if a)}")
         return records
 
     def normalize(self, ctx: RunContext, record: SourceRecord, config: ScraperConfig) -> RawItem:
+        strip_x_sources(record.context_content, record.extra)
         return RawItem(
             title=record.title,
             original_url=record.url,
@@ -304,10 +302,9 @@ class TwitterFeedAdapter(SourceAdapterBase):
                     "is_root": kind == KIND_ORIGINAL and conversation_id == tweet_id,
                     "in_reply_to_id": str(raw.get("inReplyToId") or "") or None,
                 },
-                "media": [
-                    {"type": m.type, "source_url": m.url, "width": m.width, "height": m.height}
-                    for m in media_of(raw)
-                ],
+                # source_url / video_source_url are X's CDN; they only live until
+                # enrich has archived the files and are stripped in normalize.
+                "media": [media_source(m) for m in media_of(raw)],
                 "links": links,
             },
             extra={
@@ -322,6 +319,99 @@ class TwitterFeedAdapter(SourceAdapterBase):
             author_url=f"https://x.com/{handle}",
             source_published_date=parse_created_at(str(raw["createdAt"])),
         )
+
+
+VIDEO_TYPES = ("video", "animated_gif")
+# Keys of an archived media item kept in raw_items (and copied to the site).
+ARCHIVED_KEYS = ("type", "url", "key", "width", "height", "video_url", "video_key", "video_too_large", "duration_ms")
+
+
+def media_source(m: Any) -> dict[str, Any]:
+    """A MediaRef as a not-yet-archived media item."""
+    item: dict[str, Any] = {"type": m.type, "source_url": m.url, "width": m.width, "height": m.height}
+    if m.type in VIDEO_TYPES:
+        item.update({"media_key": m.key, "video_source_url": m.video_url, "duration_ms": m.duration_ms})
+    return item
+
+
+def video_key(item: dict[str, Any]) -> str:
+    """OSS key of a video: by X's media_key, so it is known before downloading."""
+    raw = str(item.get("media_key") or "")
+    if not raw:
+        raw = hashlib.sha256(str(item.get("video_source_url") or "").split("?")[0].encode()).hexdigest()[:32]
+    return f"{MEDIA_PREFIX}/video/{re.sub(r'[^0-9A-Za-z_-]', '_', raw)}.mp4"
+
+
+@dataclass
+class MediaStats:
+    images: int = 0
+    image_failed: int = 0
+    videos: int = 0
+    video_too_large: int = 0
+    video_failed: int = 0
+    video_missing: int = 0  # no mp4 variant in the API response
+
+    def __str__(self) -> str:
+        return " ".join(f"{k}={v}" for k, v in self.__dict__.items())
+
+
+def archive_post_media(items: list[dict[str, Any]], stats: MediaStats) -> list[dict[str, Any]]:
+    """Archives a post's media to OSS; returns only the archived items, without X URLs.
+
+    Photos: the image. Videos and GIFs: the cover image (required, it is the
+    poster) and the mp4. A video over the size cap keeps its cover with
+    video_too_large; one whose mp4 failed keeps its cover only (next run retries).
+    """
+    archived: list[dict[str, Any]] = []
+    for item in items:
+        if item.get("url") and not item.get("source_url"):  # already archived
+            archived.append(item)
+            continue
+        cover = archive_media(str(item.get("source_url") or ""), MEDIA_PREFIX) if item.get("source_url") else None
+        if cover is None:
+            stats.image_failed += 1
+            continue
+        stats.images += 1
+        out: dict[str, Any] = {"type": item.get("type"), "url": cover["url"], "key": cover["key"],
+                               "width": item.get("width"), "height": item.get("height")}
+        if item.get("type") in VIDEO_TYPES:
+            if item.get("duration_ms"):
+                out["duration_ms"] = item["duration_ms"]
+            source = item.get("video_source_url")
+            if not source:
+                stats.video_missing += 1
+            else:
+                video = archive_video(str(source), video_key(item))
+                if video and video.get("url"):
+                    stats.videos += 1
+                    out.update(video_url=video["url"], video_key=video["key"])
+                elif video and video.get("too_large"):
+                    stats.video_too_large += 1
+                    out["video_too_large"] = True
+                else:
+                    stats.video_failed += 1
+        archived.append(out)
+    return archived
+
+
+def strip_x_sources(context_content: dict[str, Any], extra: dict[str, Any]) -> bool:
+    """Drops every X CDN URL from a feed row in place; returns whether anything changed.
+
+    Media that never made it to OSS is dropped with its source URL: the site
+    only ever shows our own copies.
+    """
+    changed = extra.pop("avatar_source_url", None) is not None
+    media = context_content.get("media")
+    if isinstance(media, list):
+        kept = [
+            {k: m[k] for k in ARCHIVED_KEYS if m.get(k) is not None}
+            for m in media
+            if isinstance(m, dict) and str(m.get("url") or "").startswith(f"https://{OSS_CUSTOM_DOMAIN}/")
+        ]
+        if kept != media:
+            context_content["media"] = kept
+            changed = True
+    return changed
 
 
 def _full_size_avatar(url: Any) -> str | None:

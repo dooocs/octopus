@@ -92,6 +92,11 @@ class RawItemsDao:
         sql = f"SELECT * FROM `{self.table_name}` WHERE `id` IN ({placeholders})"
         return [_decode_row(row) for row in self.db.execute_query(sql, list(ids))]
 
+    def update_context_and_extra(self, row_id: str, context_content: dict[str, Any], extra: dict[str, Any]) -> int:
+        """Rewrites only the two JSON columns of one row (maintenance scripts)."""
+        sql = f"UPDATE `{self.table_name}` SET `context_content` = %s, `extra` = %s WHERE `id` = %s"
+        return self.db.execute_update(sql, (_json_param(context_content), _json_param(extra), row_id))
+
     def _params(self, record: RawItemRecord) -> Sequence[Any]:
         return (
             record.id,
