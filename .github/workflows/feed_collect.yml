@@ -73,7 +73,9 @@ jobs:
           if [[ "${{ inputs.include_disabled }}" == "true" ]]; then
             args+=(--include-disabled)
           fi
-          python -m scripts.global_scrape "${args[@]}"
+          set -o pipefail
+          python -m scripts.global_scrape "${args[@]}" | tee collect.log
+          grep -E 'twitter_feed (window|media)' collect.log | head -4 | sed 's/^ */::notice::/' || true
 
       - name: Process the feed (translation)
         # Reads the last 24 hours of raw_items, so a failed hour is repaired by
