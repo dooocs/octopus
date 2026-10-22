@@ -24,17 +24,21 @@ create table if not exists public.proc_feed_hidden (
 create index if not exists proc_feed_hidden_published_at_idx
 on public.proc_feed_hidden (published_at desc);
 
-drop trigger if exists proc_feed_hidden_set_updated_date on public.proc_feed_hidden;
-create trigger proc_feed_hidden_set_updated_date
+create or replace trigger proc_feed_hidden_set_updated_date
 before update on public.proc_feed_hidden
 for each row execute function public.octp_set_updated_date();
 
 -- Written by the service role (Octopus); readable by the Octopus admin only.
 alter table public.proc_feed_hidden enable row level security;
 grant select on public.proc_feed_hidden to authenticated;
-drop policy if exists "octopus admin can read proc_feed_hidden" on public.proc_feed_hidden;
-create policy "octopus admin can read proc_feed_hidden" on public.proc_feed_hidden
-for select to authenticated using (auth.uid() = 'e3bffb6b-3a56-4c40-b47f-8bcb2de7916a'::uuid);
+do $$
+begin
+  if not exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'proc_feed_hidden'
+                 and policyname = 'octopus admin can read proc_feed_hidden') then
+    create policy "octopus admin can read proc_feed_hidden" on public.proc_feed_hidden
+    for select to authenticated using (auth.uid() = 'e3bffb6b-3a56-4c40-b47f-8bcb2de7916a'::uuid);
+  end if;
+end $$;
 
 -- Turn the filter on. Posts already shown are classified once on the next run.
 update public.octp_pipelines
