@@ -14,7 +14,7 @@ import httpx
 from infra.gateways.llm import ChatClient, LlmError
 from processing.core import Deps, run_pipeline
 from processing.core import PipelineIncomplete
-from processing.feed_digest import build_posts, missing_root_ids, needs_translation
+from processing.feed_digest import FILTER_SYSTEM, build_posts, missing_root_ids, needs_translation, parse_label
 
 NOW = datetime(2026, 10, 16, 6, 0, tzinfo=timezone.utc)
 
@@ -73,6 +73,10 @@ class FakeTable:
         for row in self.select(filters):
             row.update(payload)
 
+    def delete(self, filters: dict[str, str]) -> None:
+        doomed = {id(r) for r in self.select(filters)}
+        self.rows = [r for r in self.rows if id(r) not in doomed]
+
 
 class FakeRawItems:
     def __init__(self, rows: list[dict], older: list[dict] | None = None) -> None:
@@ -101,12 +105,15 @@ class FakeLlm:
         return f"“译：{user}”"
 
 
-def _deps(raw: FakeRawItems, tables: dict[str, FakeTable], llm: FakeLlm, enabled: bool = True) -> Deps:
+def _deps(raw: FakeRawItems, tables: dict[str, FakeTable], llm: FakeLlm, enabled: bool = True, filter: dict | None = None) -> Deps:
+    pipeline_input = {"selector": {"sub_source_types": ["x_feed_accounts"], "window_hours": 24}, "llm": {"model": "m"}, "prompt_version": 1}
+    if filter is not None:
+        pipeline_input["filter"] = filter
     tables.setdefault("octp_pipelines", FakeTable()).rows = [{
         "id": "p1", "slug": "feed_digest", "name": "动态", "kind": "feed_digest", "enabled": enabled,
-        "input": {"selector": {"sub_source_types": ["x_feed_accounts"], "window_hours": 24}, "llm": {"model": "m"}, "prompt_version": 1},
+        "input": pipeline_input,
     }]
-    for name in ("octp_pipeline_runs", "proc_feed_posts"):
+    for name in ("octp_pipeline_runs", "proc_feed_posts", "proc_feed_hidden"):
         tables.setdefault(name, FakeTable())
     return Deps(raw_items=raw, table=lambda name: tables[name], llm=lambda cfg: llm, now=lambda: NOW)
 
@@ -255,6 +262,114 @@ class FeedDigestTest(unittest.TestCase):
         with self.assertRaisesRegex(LlmError, "KIMI_API_KEY"):
             run_pipeline("feed_digest", deps)
         self.assertEqual(tables["octp_pipeline_runs"].rows[0]["status"], "failed")
+
+
+FILTER = {"version": 1, "hide": ["政治", "硬核", "广告", "缺上下文"]}
+
+
+class LabelLlm(FakeLlm):
+    """Filter calls answer by a keyword in the post; translation calls as FakeLlm."""
+
+    LABELS = {"election": "政治", "kernel": "硬核", "promo": "「广告」", "this": "缺上下文"}
+
+    def complete(self, system: str, user: str, *, max_tokens: int = 2000) -> str:
+        if system == FILTER_SYSTEM:
+            self.calls.append((system, user))
+            if "garbled" in user:
+                return "I cannot decide"
+            return next((label for word, label in self.LABELS.items() if word in user), "保留")
+        return super().complete(system, user, max_tokens=max_tokens)
+
+    def filter_calls(self) -> int:
+        return sum(1 for system, _ in self.calls if system == FILTER_SYSTEM)
+
+
+class FeedFilterTest(unittest.TestCase):
+    def test_thread_fragments_without_their_first_tweet_are_hidden_without_an_llm(self) -> None:
+        rows = [
+            # simonw replied to someone else (dropped by the crawler), then to himself.
+            _row("simonw", "601", 10, "@someone @other most developers surveyed…", conversation="600"),
+            _row("sama", "200", 5, "shipping"),
+        ]
+        posts = {p.author: p for p in build_posts(rows)}
+        self.assertFalse(posts["simonw"].standalone)
+        self.assertTrue(posts["sama"].standalone)
+
+        tables: dict[str, FakeTable] = {}
+        llm = LabelLlm()
+        result = run_pipeline("feed_digest", _deps(FakeRawItems(rows), tables, llm))
+        self.assertEqual(result["hidden"], {"非独立帖子": 1})
+        self.assertEqual([r["author"] for r in tables["proc_feed_posts"].rows], ["sama"])
+        hidden = tables["proc_feed_hidden"].rows
+        self.assertEqual((hidden[0]["author"], hidden[0]["reason"]), ("simonw", "非独立帖子"))
+        self.assertTrue(all("simonw" not in user for _, user in llm.calls), "no LLM call for a fragment")
+
+    def test_labels_hide_posts_and_are_cached_per_content(self) -> None:
+        rows = [
+            _row("sama", "200", 5, "shipping a new model"),
+            _row("elonmusk", "201", 6, "vote in the election"),
+            _row("svpino", "202", 7, "the kernel scheduler internals"),
+            _row("marc", "203", 8, "promo code inside"),
+            _row("elonmusk", "204", 9, "Forward this to your friends"),
+            _row("thom", "205", 10, "https://t.co/x", media=[{"type": "photo", "url": "https://www.amazingindex.com/media/x/a.jpg"}]),
+        ]
+        tables: dict[str, FakeTable] = {}
+        llm = LabelLlm()
+        first = run_pipeline("feed_digest", _deps(FakeRawItems(rows), tables, llm, filter=FILTER))
+        self.assertEqual(first["hidden"], {"政治": 1, "硬核": 1, "广告": 1, "缺上下文": 1})
+        self.assertEqual(first["classified"], 5, "the media-only post needs no label")
+        shown = {r["id"] for r in tables["proc_feed_posts"].rows}
+        self.assertEqual(shown, {_id("sama", "200"), _id("thom", "205")})
+        self.assertEqual({r["filter_version"] for r in tables["proc_feed_posts"].rows}, {1})
+        self.assertEqual(len(tables["proc_feed_hidden"].rows), 4)
+        self.assertTrue(all("election" not in user for system, user in llm.calls if system != FILTER_SYSTEM), "hidden posts are not translated")
+
+        calls = len(llm.calls)
+        second = run_pipeline("feed_digest", _deps(FakeRawItems(rows), tables, llm, filter=FILTER))
+        self.assertEqual(len(llm.calls), calls, "same content, same filter version: no LLM calls")
+        self.assertEqual(second["labels_reused"], 5)
+
+        third = run_pipeline("feed_digest", _deps(FakeRawItems(rows), tables, llm, filter={**FILTER, "version": 2}))
+        self.assertEqual(third["classified"], 5, "a new filter version labels everything again")
+        self.assertEqual(third["translations_reused"], 2, "but translations are kept")
+
+    def test_turning_the_filter_on_removes_posts_already_shown(self) -> None:
+        rows = [_row("sama", "200", 5, "shipping"), _row("dhh", "300", 6, "this election is a disgrace")]
+        tables: dict[str, FakeTable] = {}
+        llm = LabelLlm()
+        run_pipeline("feed_digest", _deps(FakeRawItems(rows), tables, llm))
+        self.assertEqual(len(tables["proc_feed_posts"].rows), 2)
+
+        run_pipeline("feed_digest", _deps(FakeRawItems(rows), tables, llm, filter=FILTER))
+        self.assertEqual([r["author"] for r in tables["proc_feed_posts"].rows], ["sama"])
+        self.assertEqual([r["reason"] for r in tables["proc_feed_hidden"].rows], ["政治"])
+
+        # Narrowing the hide list brings it back and clears it from the hidden table.
+        run_pipeline("feed_digest", _deps(FakeRawItems(rows), tables, llm, filter={"version": 2, "hide": ["广告"]}))
+        self.assertEqual({r["author"] for r in tables["proc_feed_posts"].rows}, {"sama", "dhh"})
+        self.assertEqual(tables["proc_feed_hidden"].rows, [])
+
+    def test_an_unreadable_label_leaves_the_post_out_and_marks_the_run_partial(self) -> None:
+        rows = [_row("sama", "200", 5, "shipping"), _row("gdb", "500", 6, "garbled")]
+        tables: dict[str, FakeTable] = {}
+        with self.assertRaisesRegex(PipelineIncomplete, "1 of 2 posts failed"):
+            run_pipeline("feed_digest", _deps(FakeRawItems(rows), tables, LabelLlm(), filter=FILTER))
+        self.assertEqual([r["author"] for r in tables["proc_feed_posts"].rows], ["sama"])
+        self.assertEqual(tables["proc_feed_hidden"].rows, [], "not shown, not hidden: retried next run")
+        self.assertIn("filter", tables["octp_pipeline_runs"].rows[0]["summary"]["errors"][0])
+
+    def test_unknown_hide_labels_are_a_config_error(self) -> None:
+        with self.assertRaisesRegex(ValueError, "unknown labels"):
+            run_pipeline("feed_digest", _deps(FakeRawItems([]), {}, LabelLlm(), filter={"version": 1, "hide": ["八卦"]}))
+
+    def test_parse_label(self) -> None:
+        self.assertEqual(parse_label("政治"), "政治")
+        self.assertEqual(parse_label(" 「缺上下文」。"), "缺上下文")
+        self.assertEqual(parse_label("类别：硬核"), "硬核")
+        with self.assertRaises(ValueError):
+            parse_label("政治或广告")
+        with self.assertRaises(ValueError):
+            parse_label("not sure")
 
 
 class ChatClientTest(unittest.TestCase):

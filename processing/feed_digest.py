@@ -1,9 +1,22 @@
 """feed_digest: the 动态 tab's processing (docs/feed-pipeline-design.md §5.2).
 
 raw_items of the feed (one row per tweet) → posts (a tweet, or a thread
-merged under its first tweet) → Chinese translation per post → proc_feed_posts.
-The site shows the original text with the translation below it, grouped by
-author (display name and avatar are on every post row).
+merged under its first tweet) → filter → Chinese translation per post →
+proc_feed_posts. The site shows the translation, grouped by author (display
+name and avatar are on every post row).
+
+Filter (2026-10-22): the site shows only standalone posts, and only those a
+general reader can enjoy without context.
+- Standalone: a post is shown only when its first tweet is the author's own
+  original post. A thread whose head was a quote, a retweet or a reply to
+  someone else (dropped by the crawler) would show up as a fragment, so it is
+  hidden without an LLM call.
+- AI filter (input.filter): one short LLM call labels each post 保留 / 政治 /
+  硬核 / 广告 / 缺上下文; labels in filter.hide are hidden. The label is cached
+  per content and filter version, like translations.
+- Hidden posts are written to proc_feed_hidden (with the reason, for review)
+  and removed from proc_feed_posts, so the site needs no change. A post that
+  fails to classify is left out and retried, like a failed translation.
 
 - A post is translated again only when its content (its thread) or the
   prompt version changes.
@@ -19,8 +32,10 @@ Pipeline input:
     {
       "selector": {"sub_source_types": ["x_feed_accounts"], "window_hours": 24},
       "llm": {"model": "...", "base_url": "...", "extra_body": {...}},
-      "prompt_version": 1
+      "prompt_version": 1,
+      "filter": {"version": 1, "hide": ["政治", "硬核", "广告", "缺上下文"]}
     }
+Without "filter" no LLM filtering happens; the standalone rule always applies.
 """
 
 from __future__ import annotations
@@ -35,6 +50,7 @@ from typing import Any, Iterable
 from processing.core import Deps, PipelineConfig, PipelineIncomplete, register_pipeline
 
 POSTS_TABLE = "proc_feed_posts"
+HIDDEN_TABLE = "proc_feed_hidden"
 # url is the image (a video's cover); video_url the archived mp4, when there is one.
 MEDIA_KEYS = ("type", "url", "width", "height", "video_url", "video_too_large", "duration_ms")
 
@@ -43,6 +59,26 @@ TRANSLATE_SYSTEM = (
     "你是专业的科技翻译。把用户给出的 X（Twitter）帖子忠实翻译成简体中文，译文会显示在原文下方供对照阅读。"
     "要求：只输出译文，不加任何解释、前言或引号；保留 @用户名、#话题、链接、代码、数字和产品/模型/公司名的原文；"
     "语气贴近原文，口语就译成口语；段落和换行与原文一一对应。"
+)
+
+LABEL_KEEP = "保留"
+FILTER_LABELS = (LABEL_KEEP, "政治", "硬核", "广告", "缺上下文")
+REASON_NOT_STANDALONE = "非独立帖子"
+
+# The reader: Chinese, mostly developers and indie makers, scrolling in spare
+# moments. One label, nothing else, so parsing stays trivial.
+FILTER_SYSTEM = (
+    "你是一个中文资讯站「动态」栏目的内容审核员。读者是国内的开发者和独立开发者，在碎片时间刷这个栏目，"
+    "想看有意思、有观点、有数字、有故事的帖子。给你一条 X（Twitter）帖子，判断它属于下面哪一类，只输出类别名，不要输出任何其他文字：\n"
+    "政治：涉及选举、政党、政客、政府施政或监管之争、国家间关系、战争、移民、意识形态或文化战争，或任何与中国政治相关的内容；"
+    "AI 公司和政府、监管机构的博弈也算。只是顺带提到某个国家或公司，不算。\n"
+    "硬核：需要专业背景才能看懂的深度技术内容，比如贴代码、讲算法或论文细节、底层系统原理、跑分表格。"
+    "普通人能看懂的技术新闻、新产品发布、使用感受，不算。\n"
+    "广告：替别人推广的付费内容、带货、优惠码、抽奖、卖课。作者介绍自己做的产品不算。\n"
+    "缺上下文：只有看到别的内容才能看懂，而这些内容不在帖子里：评论另一条帖子或图片（如“this”“转给你在德州的朋友”）、"
+    "只有一个词/数字/表情的反应、以 @某人 开头的对话回复。\n"
+    "保留：不属于以上任何一类。\n"
+    "拿不准时，选「保留」。"
 )
 
 _URL = re.compile(r"https?://\S+")
@@ -60,6 +96,29 @@ def needs_translation(text: str, langs: list[str]) -> bool:
         return False
     # Language unknown or mixed: mostly Chinese characters means nothing to translate.
     return len(_HAN.findall(words)) * 2 < len(letters)
+
+
+def has_words(text: str) -> bool:
+    """Any letters left once links and @mentions are removed."""
+    return any(ch.isalpha() for ch in _MENTION.sub(" ", _URL.sub(" ", text)))
+
+
+def parse_label(answer: str) -> str:
+    """The filter label in an LLM answer; raises when there is none."""
+    cleaned = answer.strip().strip("「」“”\"'*` 。.")
+    if cleaned in FILTER_LABELS:
+        return cleaned
+    found = [label for label in FILTER_LABELS if label in answer]
+    if len(found) == 1:
+        return found[0]
+    raise ValueError(f"filter answer has no single label: {answer[:80]!r}")
+
+
+def filter_input(post: "Post") -> str:
+    text = post.text_original
+    if post.media:
+        text += f"\n\n（附带 {len(post.media)} 张图片或视频）"
+    return text
 
 
 def _md5(value: str) -> str:
@@ -90,6 +149,8 @@ class Post:
     text_original: str
     media: list[dict[str, Any]] = field(default_factory=list)
     langs: list[str] = field(default_factory=list)
+    # The first tweet of the post is the author's own original post (in the data).
+    standalone: bool = True
 
     @property
     def content_hash(self) -> str:
@@ -129,7 +190,10 @@ def build_posts(rows: Iterable[dict[str, Any]]) -> list[Post]:
     posts: list[Post] = []
     for (_, conversation), parts in groups.items():
         parts.sort(key=lambda r: (_as_utc(r["source_published_date"]), _tweet_id(r)))
-        root = next((p for p in parts if _tweet_id(p) == conversation), parts[0])
+        root = next((p for p in parts if _tweet_id(p) == conversation), None)
+        standalone = root is not None
+        if root is None:
+            root = parts[0]
         ordered = [root] + [p for p in parts if p is not root]
         latest = ordered[-1]
         extra = latest.get("extra") or {}
@@ -150,6 +214,7 @@ def build_posts(rows: Iterable[dict[str, Any]]) -> list[Post]:
             text_original="\n\n".join(str(p.get("content") or "").strip() for p in ordered).strip(),
             media=media,
             langs=sorted({str((p.get("extra") or {}).get("lang") or "") for p in ordered} - {""}),
+            standalone=standalone,
         ))
     return sorted(posts, key=lambda p: p.updated_at, reverse=True)
 
@@ -184,6 +249,12 @@ def run_feed_digest(config: PipelineConfig, deps: Deps) -> dict[str, Any]:
         raise ValueError("feed_digest needs input.selector.sub_source_types")
     window = timedelta(hours=int(selector.get("window_hours") or 24))
     prompt_version = int(config.input.get("prompt_version") or 1)
+    filter_config = config.input.get("filter") or None
+    filter_version = int(filter_config.get("version") or 1) if filter_config else None
+    hide_labels = {str(label) for label in (filter_config or {}).get("hide") or []}
+    unknown = hide_labels - set(FILTER_LABELS)
+    if unknown:
+        raise ValueError(f"filter.hide has unknown labels {sorted(unknown)}; known: {FILTER_LABELS}")
     since = deps.now() - window
 
     rows = deps.raw_items.select_published_since(sub_source_types, since)
@@ -191,13 +262,61 @@ def run_feed_digest(config: PipelineConfig, deps: Deps) -> dict[str, Any]:
     posts = build_posts([*rows, *roots])
 
     posts_table = deps.table(POSTS_TABLE)
-    existing = _existing(posts_table, "id", [p.id for p in posts])
+    hidden_table = deps.table(HIDDEN_TABLE)
+    ids = [p.id for p in posts]
+    existing = _existing(posts_table, "id", ids)
+    existing_hidden = _existing(hidden_table, "id", ids)
     llm = None
+
+    def client():
+        nonlocal llm
+        if llm is None:
+            llm = deps.llm(config.input.get("llm") or {})  # a missing key fails the whole run here
+        return llm
+
     post_rows: list[dict[str, Any]] = []
-    translated = reused = skipped = 0
+    hidden_rows: list[dict[str, Any]] = []
+    translated = reused = skipped = classified = labels_reused = 0
+    hidden_counts: dict[str, int] = {}
     errors: list[str] = []
     for post in posts:
         before = existing.get(post.id)
+        hid = existing_hidden.get(post.id)
+
+        # 1. Filter: which posts the site shows at all.
+        if not post.standalone:
+            label = REASON_NOT_STANDALONE
+        elif filter_version is None or not has_words(post.text_original):
+            label = LABEL_KEEP  # no filter configured, or only media/links: nothing to judge
+        elif hid and hid.get("content_hash") == post.content_hash and int(hid.get("filter_version") or 0) == filter_version:
+            label = str(hid.get("reason") or "")
+            labels_reused += 1
+        elif before and before.get("content_hash") == post.content_hash and int(before.get("filter_version") or 0) == filter_version:
+            label = LABEL_KEEP
+            labels_reused += 1
+        else:
+            chat = client()  # outside the try: a missing key fails the whole run
+            try:
+                label = parse_label(chat.complete(FILTER_SYSTEM, filter_input(post), max_tokens=20))
+            except Exception as exc:  # left out and retried next run, never shown unfiltered
+                errors.append(f"{post.url}: filter: {exc.__class__.__name__}: {exc}")
+                continue
+            classified += 1
+        if label == REASON_NOT_STANDALONE or label in hide_labels:
+            hidden_counts[label] = hidden_counts.get(label, 0) + 1
+            hidden_rows.append({
+                "id": post.id,
+                "author": post.author,
+                "url": post.url,
+                "published_at": post.published_at.isoformat(),
+                "text_original": post.text_original,
+                "reason": label,
+                "content_hash": post.content_hash,
+                "filter_version": filter_version or 0,
+            })
+            continue
+
+        # 2. Translation of the posts that are shown.
         if before and before.get("content_hash") == post.content_hash and int(before.get("prompt_version") or 0) == prompt_version:
             text_zh = str(before.get("text_zh") or "")
             reused += 1
@@ -205,10 +324,9 @@ def run_feed_digest(config: PipelineConfig, deps: Deps) -> dict[str, Any]:
             text_zh = ""
             skipped += 1
         else:
-            if llm is None:
-                llm = deps.llm(config.input.get("llm") or {})  # a missing key fails the whole run here
+            chat = client()
             try:
-                text_zh = _clean(llm.complete(TRANSLATE_SYSTEM, post.text_original, max_tokens=2000))
+                text_zh = _clean(chat.complete(TRANSLATE_SYSTEM, post.text_original, max_tokens=2000))
             except Exception as exc:  # one bad post must not hold back the others
                 errors.append(f"{post.url}: {exc.__class__.__name__}: {exc}")
                 continue
@@ -227,15 +345,30 @@ def run_feed_digest(config: PipelineConfig, deps: Deps) -> dict[str, Any]:
             "media": post.media,
             "content_hash": post.content_hash,
             "prompt_version": prompt_version,
+            "filter_version": filter_version,
         })
+
+    # Hidden first, then removed from the site's table; shown posts leave the hidden table.
+    if hidden_rows:
+        hidden_table.upsert(hidden_rows, on_conflict="id")
+        stale = [row["id"] for row in hidden_rows if row["id"] in existing]
+        for chunk in _chunks(stale):
+            posts_table.delete({"id": "in.(" + ",".join(f'"{k}"' for k in chunk) + ")"})
     if post_rows:
         posts_table.upsert(post_rows, on_conflict="id")
+        unhidden = [row["id"] for row in post_rows if row["id"] in existing_hidden]
+        for chunk in _chunks(unhidden):
+            hidden_table.delete({"id": "in.(" + ",".join(f'"{k}"' for k in chunk) + ")"})
 
     summary = {
         "window_start": since.isoformat(),
         "raw_items": len(rows),
         "thread_roots_fetched": len(roots),
         "posts": len(posts),
+        "shown": len(post_rows),
+        "hidden": hidden_counts,
+        "classified": classified,
+        "labels_reused": labels_reused,
         "translated": translated,
         "translations_reused": reused,
         "no_translation_needed": skipped,
@@ -244,5 +377,6 @@ def run_feed_digest(config: PipelineConfig, deps: Deps) -> dict[str, Any]:
     }
     if errors:
         summary["errors"] = errors[:20]
-        raise PipelineIncomplete(f"{len(errors)} of {len(posts)} posts failed to translate; the rest were saved", summary, partial=bool(post_rows))
+        written = bool(post_rows or hidden_rows)
+        raise PipelineIncomplete(f"{len(errors)} of {len(posts)} posts failed to process; the rest were saved", summary, partial=written)
     return summary

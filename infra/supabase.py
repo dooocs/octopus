@@ -4,7 +4,7 @@ import json
 import os
 from typing import Any, Iterable
 
-from infra.gateways.http_transport import http_get, http_patch, http_post
+from infra.gateways.http_transport import http_delete, http_get, http_patch, http_post
 
 CONFIG_TABLE = "octp_scraper_configs"
 LOG_TABLE = "octp_scraper_logs"
@@ -306,6 +306,17 @@ class SupabaseTable:
             headers={**self.client.headers, "Prefer": "return=minimal"},
             params=filters,
             json=payload,
+            timeout=30,
+        )
+        response.raise_for_status()
+
+    def delete(self, filters: dict[str, str]) -> None:
+        if not filters:
+            raise ValueError("refusing to delete without a filter")
+        response = http_delete(
+            self.url,
+            headers={**self.client.headers, "Prefer": "return=minimal"},
+            params=filters,
             timeout=30,
         )
         response.raise_for_status()

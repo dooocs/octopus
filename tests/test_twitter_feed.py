@@ -112,6 +112,20 @@ class ClassifyTest(unittest.TestCase):
         self.assertEqual(classify(_tweet("2", "a", "10", retweeted_tweet={"id": "9"})), KIND_RETWEET)
         self.assertEqual(classify(_tweet("3", "a", "10", text="RT @b: hi")), KIND_RETWEET)
         self.assertEqual(classify(_tweet("4", "a", "10", quoted_tweet={"id": "9"})), KIND_QUOTE)
+        # Quotes whose quoted post is missing from the payload (deleted, protected, or
+        # not expanded) are still quotes; so is a post that links to another tweet.
+        self.assertEqual(classify(_tweet("41", "a", "10", isQuote=True)), KIND_QUOTE)
+        self.assertEqual(classify(_tweet("42", "a", "10", is_quote_status=True)), KIND_QUOTE)
+        self.assertEqual(classify(_tweet("43", "a", "10", quoted_status_id="9")), KIND_QUOTE)
+        self.assertEqual(classify(_tweet("44", "a", "10", retweetedTweet={"id": "9"})), KIND_RETWEET)
+        linked = _tweet("45", "a", "10", text="Forward this https://t.co/q",
+                        entities={"urls": [{"url": "https://t.co/q", "expanded_url": "https://x.com/someone/status/999", "display_url": "x.com/someone/…"}]})
+        self.assertEqual(classify(linked), KIND_QUOTE)
+        own = _tweet("46", "a", "10", entities={"urls": [{"url": "https://t.co/o", "expanded_url": "https://twitter.com/a/status/46/photo/1"}]})
+        self.assertEqual(classify(own), KIND_ORIGINAL, "a link to the post itself is not a quote")
+        site = _tweet("47", "a", "10", entities={"urls": [{"url": "https://t.co/s", "expanded_url": "https://simonwillison.net/2026/Oct/21/x/"}]})
+        self.assertEqual(classify(site), KIND_ORIGINAL)
+        self.assertEqual(classify(_tweet("48", "a", "10", isQuote=False, quoted_tweet=None)), KIND_ORIGINAL)
         self.assertEqual(classify(_tweet("5", "a", "10", isReply=True, inReplyToId="9", inReplyToUserId="20")), KIND_REPLY)
         self.assertEqual(classify(_tweet("6", "a", "10", isReply=True, inReplyToId="1", inReplyToUserId="10", conversationId="1")), KIND_THREAD)
 

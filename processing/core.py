@@ -41,6 +41,8 @@ class Table(Protocol):
 
     def update(self, filters: dict[str, str], payload: dict[str, Any]) -> None: ...
 
+    def delete(self, filters: dict[str, str]) -> None: ...
+
 
 @dataclass(frozen=True)
 class PipelineConfig:

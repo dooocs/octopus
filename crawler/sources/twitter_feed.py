@@ -105,12 +105,39 @@ def build_query(accounts: list[str], since: datetime, until: datetime) -> str:
     return f"({clause}) since_time:{int(since.timestamp())} until_time:{int(until.timestamp())}"
 
 
+# A link to a tweet: x.com/<user>/status/<id> (also twitter.com, mobile., www.).
+_STATUS_LINK = re.compile(r"^https?://(?:(?:www|mobile)\.)?(?:x|twitter)\.com/\w+/status(?:es)?/(\d+)", re.I)
+# Keys twitterapi.io (and older X payloads) use to mark a retweet or a quote.
+_RETWEET_KEYS = ("retweeted_tweet", "retweetedTweet", "retweeted_status")
+_QUOTE_KEYS = ("quoted_tweet", "quotedTweet", "quoted_status", "quoted_status_id", "quotedTweetId", "quoted_status_id_str")
+_QUOTE_FLAGS = ("is_quote_status", "isQuote", "isQuoteStatus")
+
+
+def links_to_other_tweet(raw: dict[str, Any]) -> bool:
+    """The post carries a link to another tweet: it shows up as a bare link on the site."""
+    own_id = str(raw.get("id") or "")
+    entities = raw.get("entities") or {}
+    for item in (entities.get("urls") if isinstance(entities, dict) else None) or []:
+        if not isinstance(item, dict):
+            continue
+        match = _STATUS_LINK.match(str(item.get("expanded_url") or ""))
+        if match and match.group(1) != own_id:
+            return True
+    return False
+
+
 def classify(raw: dict[str, Any]) -> str:
+    """Only original posts and the author's own threads are shown on the site.
+
+    A retweet or quote shows the author's words without the post they are
+    about, so both are dropped, whichever key the payload uses for them; a
+    post that links to another tweet is treated as a quote for the same reason.
+    """
     author_id = str((raw.get("author") or {}).get("id") or "")
     text = str(raw.get("text") or "")
-    if raw.get("retweeted_tweet") or text.startswith("RT @"):
+    if any(raw.get(k) for k in _RETWEET_KEYS) or text.startswith("RT @"):
         return KIND_RETWEET
-    if raw.get("quoted_tweet"):
+    if any(raw.get(k) for k in _QUOTE_KEYS) or any(raw.get(k) is True for k in _QUOTE_FLAGS) or links_to_other_tweet(raw):
         return KIND_QUOTE
     if raw.get("isReply") or raw.get("inReplyToId"):
         reply_to = str(raw.get("inReplyToUserId") or "")

@@ -155,6 +155,15 @@ load pipeline config → select inputs → steps… → write outputs → record
 | write | 写入 `proc_feed_posts`（带博主昵称和头像）；单条翻译失败不影响其他帖子，失败的这条不写入、下次重试，本次运行记为 partial 并让 workflow 失败；超出 24 小时的数据保留在表里，只是不再展示 |
 | notify | 有变化时向 ahaIndex2 发送 `repository_dispatch: feed-updated` |
 
+### 5.3 过滤（2026-10-22）
+
+网站只展示**独立帖子**，且只展示普通读者不用上下文就能看懂的帖子。
+
+- 采集层：转推、引用一律丢弃。除 `quoted_tweet` 外，也认 `isQuote` / `is_quote_status` / `quoted_status_id` 等字段，以及正文里指向别的推文的链接（在网站上只会显示成一个光秃秃的链接）。
+- 加工层·独立帖子：帖子的第一条必须是作者自己的原创推文。头部是引用、转推或回复别人（被采集层丢掉）的 thread 只剩碎片，直接隐藏，不调 LLM。
+- 加工层·AI 分类（`input.filter`）：翻译前一次短调用，把帖子标成 保留 / 政治 / 硬核 / 广告 / 缺上下文，`filter.hide` 里的类别隐藏。标签按内容和 `filter.version` 缓存，和翻译一样不重复调用；改 prompt 时把 version 加一。分类失败的帖子这次不展示、下次重试。
+- 隐藏的帖子写入 `proc_feed_hidden`（带原因，供后台复查），并从 `proc_feed_posts` 删除，所以网站构建不需要改。不设每人每天的发帖上限。
+
 ## 6. 表结构（Supabase「aha index」）
 
 ```sql
