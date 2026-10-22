@@ -312,16 +312,18 @@ class FeedFilterTest(unittest.TestCase):
             _row("marc", "203", 8, "promo code inside"),
             _row("elonmusk", "204", 9, "Forward this to your friends"),
             _row("thom", "205", 10, "https://t.co/x", media=[{"type": "photo", "url": "https://www.amazingindex.com/media/x/a.jpg"}]),
+            _row("tszzl", "206", 11, "4"),
         ]
         tables: dict[str, FakeTable] = {}
         llm = LabelLlm()
         first = run_pipeline("feed_digest", _deps(FakeRawItems(rows), tables, llm, filter=FILTER))
-        self.assertEqual(first["hidden"], {"政治": 1, "硬核": 1, "广告": 1, "缺上下文": 1})
-        self.assertEqual(first["classified"], 5, "the media-only post needs no label")
+        self.assertEqual(first["hidden"], {"政治": 1, "硬核": 1, "广告": 1, "缺上下文": 2})
+        self.assertEqual(first["classified"], 5, "posts without words need no LLM call")
+        self.assertIn(_id("tszzl", "206"), {r["id"] for r in tables["proc_feed_hidden"].rows}, "a lone number is a reaction to something not shown")
         shown = {r["id"] for r in tables["proc_feed_posts"].rows}
         self.assertEqual(shown, {_id("sama", "200"), _id("thom", "205")})
         self.assertEqual({r["filter_version"] for r in tables["proc_feed_posts"].rows}, {1})
-        self.assertEqual(len(tables["proc_feed_hidden"].rows), 4)
+        self.assertEqual(len(tables["proc_feed_hidden"].rows), 5)
         self.assertTrue(all("election" not in user for system, user in llm.calls if system != FILTER_SYSTEM), "hidden posts are not translated")
 
         calls = len(llm.calls)

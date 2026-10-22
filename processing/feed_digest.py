@@ -12,7 +12,8 @@ general reader can enjoy without context.
   someone else (dropped by the crawler) would show up as a fragment, so it is
   hidden without an LLM call.
 - AI filter (input.filter): one short LLM call labels each post 保留 / 政治 /
-  硬核 / 广告 / 缺上下文; labels in filter.hide are hidden. The label is cached
+  硬核 / 广告 / 缺上下文; labels in filter.hide are hidden. Posts with no words
+  get no call: kept when they carry media, 缺上下文 otherwise (a lone "4"). The label is cached
   per content and filter version, like translations.
 - Hidden posts are written to proc_feed_hidden (with the reason, for review)
   and removed from proc_feed_posts, so the site needs no change. A post that
@@ -62,7 +63,8 @@ TRANSLATE_SYSTEM = (
 )
 
 LABEL_KEEP = "保留"
-FILTER_LABELS = (LABEL_KEEP, "政治", "硬核", "广告", "缺上下文")
+LABEL_NO_CONTEXT = "缺上下文"
+FILTER_LABELS = (LABEL_KEEP, "政治", "硬核", "广告", LABEL_NO_CONTEXT)
 REASON_NOT_STANDALONE = "非独立帖子"
 
 # The reader: Chinese, mostly developers and indie makers, scrolling in spare
@@ -71,10 +73,11 @@ FILTER_SYSTEM = (
     "你是一个中文资讯站「动态」栏目的内容审核员。读者是国内的开发者和独立开发者，在碎片时间刷这个栏目，"
     "想看有意思、有观点、有数字、有故事的帖子。给你一条 X（Twitter）帖子，判断它属于下面哪一类，只输出类别名，不要输出任何其他文字：\n"
     "政治：涉及选举、政党、政客、政府施政或监管之争、国家间关系、战争、移民、意识形态或文化战争，或任何与中国政治相关的内容；"
-    "AI 公司和政府、监管机构的博弈也算。只是顺带提到某个国家或公司，不算。\n"
+    "AI 公司和政府、监管机构的博弈也算；嘲讽或攻击媒体、某个群体、某种立场的言论也算。只是顺带提到某个国家或公司，不算。\n"
     "硬核：需要专业背景才能看懂的深度技术内容，比如贴代码、讲算法或论文细节、底层系统原理、跑分表格。"
     "普通人能看懂的技术新闻、新产品发布、使用感受，不算。\n"
-    "广告：替别人推广的付费内容、带货、优惠码、抽奖、卖课。作者介绍自己做的产品不算。\n"
+    "广告：替别人推广的付费内容（帖子在夸某家公司的产品，而作者不是这家公司的人）、带货、优惠码、抽奖、卖课。"
+    "作者发布或介绍自己做的产品不算广告，用调侃、恶搞方式写的“发布”也不算，这两种都选「保留」。\n"
     "缺上下文：只有看到别的内容才能看懂，而这些内容不在帖子里：评论另一条帖子或图片（如“this”“转给你在德州的朋友”）、"
     "只有一个词/数字/表情的反应、以 @某人 开头的对话回复。\n"
     "保留：不属于以上任何一类。\n"
@@ -286,8 +289,12 @@ def run_feed_digest(config: PipelineConfig, deps: Deps) -> dict[str, Any]:
         # 1. Filter: which posts the site shows at all.
         if not post.standalone:
             label = REASON_NOT_STANDALONE
-        elif filter_version is None or not has_words(post.text_original):
-            label = LABEL_KEEP  # no filter configured, or only media/links: nothing to judge
+        elif filter_version is None:
+            label = LABEL_KEEP
+        elif not has_words(post.text_original):
+            # Nothing to judge: photos/videos stand on their own; a lone number,
+            # emoji or link does not (a reaction to something that is not shown).
+            label = LABEL_KEEP if post.media else LABEL_NO_CONTEXT
         elif hid and hid.get("content_hash") == post.content_hash and int(hid.get("filter_version") or 0) == filter_version:
             label = str(hid.get("reason") or "")
             labels_reused += 1
