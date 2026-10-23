@@ -78,9 +78,21 @@ def main() -> int:
     ap.add_argument("--max-pages", type=int, default=25, help="pages of 200 per seed")
     ap.add_argument("--min-seeds", type=int, default=3, help="keep accounts followed by at least N seeds")
     ap.add_argument("--sample", type=int, default=120, help="pull recent tweets for the top N candidates")
+    ap.add_argument("--handles", default="", help="comma list: only pull recent tweets for these")
     args = ap.parse_args()
 
     client = TwitterApiClient(require_api_key())
+    if args.handles:
+        out = {}
+        for h in [x.strip() for x in args.handles.split(",") if x.strip()]:
+            try:
+                out[h] = recent_tweets(client, h)
+            except TwitterApiError as exc:
+                out[h] = {"error": str(exc)}
+        with open(args.out, "w", encoding="utf-8") as f:
+            json.dump(out, f, ensure_ascii=False, indent=1)
+        print(f"requests={client.requests} handles={len(out)}")
+        return 0
     followed_by: dict[str, list[str]] = defaultdict(list)
     profiles: dict[str, dict] = {}
     seed_stats: dict[str, object] = {}

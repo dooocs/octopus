@@ -17,6 +17,7 @@ jobs:
     timeout-minutes: 30
     env:
       TWITTERAPI_IO_KEY: ${{ secrets.TWITTERAPI_IO_KEY }}
+      HANDLES: dvassallo,ryancarson,ryolu_,benjitaylor,johnrush,thekitze,nathanbarry,FarzaTV,yasser_elsaid_,Erwin_AI,csallen,edwinarbus,rileybrown,marckohlbrugge,dannypostma,nateliason,DanielLockyer,peer_rich,robj3d3,nico_jeannen,asmartbear,harrydry,linuz90,mitchellh,soren_iverson,ericzakariasson,antonosika,maccaw,damonchen,iannuttall,Davidjpark96,MengTo,Shpigford,brian_lovin,ImSh4yy,pbteja1998,nickfloats,skirano,javilopen,daniel_nguyenx,SahilBloom,jackbutcher,awilkinson,david_perell,kevinrose,rrhoover,jeremyphoward,AmandaAskell,mikeyk,lilianweng,AndrewCurran_,bilawalsidhu,alexgraveley,heyeaslo,rasbt,natolambert,badlogicgames,emilkowalski,_chenglou,zenorocha,DashHuang,tianyi,JustinLin610,kaifulee,elder_plinius,realGeorgeHotz,kevinroose,awnihannun
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -24,11 +25,11 @@ jobs:
           python-version: "3.12"
           cache: pip
       - run: python -m pip install .
-      - run: python -m scripts.cofollow_scan --out cofollow_result.json
+      - run: python -m scripts.cofollow_scan --out recent_sample.json --handles "$HANDLES"
       - name: Commit result
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
-          git add cofollow_result.json
+          git add recent_sample.json
           git commit -m "cofollow scan result"
           git push
