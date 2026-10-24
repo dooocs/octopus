@@ -86,7 +86,10 @@ def main() -> int:
         out = {}
         for h in [x.strip() for x in args.handles.split(",") if x.strip()]:
             try:
-                out[h] = recent_tweets(client, h)
+                info = client.get("/twitter/user/info", {"userName": h})
+                user = info.get("data") if isinstance(info.get("data"), dict) else info
+                out[h] = {"info": {k: user.get(k) for k in ("name", "description", "followers", "followers_count", "statusesCount", "createdAt", "location") if k in user},
+                          "recent": recent_tweets(client, h)}
             except TwitterApiError as exc:
                 out[h] = {"error": str(exc)}
         with open(args.out, "w", encoding="utf-8") as f:
