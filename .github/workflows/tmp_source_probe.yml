@@ -23,25 +23,18 @@ jobs:
           UA='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36'
           get() { name=$1; url=$2; shift 2
             code=$(curl -sL --compressed --max-time 30 -A "$UA" "$@" -o "out/$name" -w '%{http_code}' "$url"); echo "$code $(wc -c < out/$name) $name $url" | tee -a out/status.txt; }
-          get showhn.json 'https://hn.algolia.com/api/v1/search_by_date?tags=show_hn&numericFilters=points%3E30&hitsPerPage=50'
-          get trustmrr_home.html https://trustmrr.com/
-          get trustmrr_acquire.html https://trustmrr.com/acquire
-          get trustmrr_sitemap.xml https://trustmrr.com/sitemap.xml
-          get trustmrr_startup.html https://trustmrr.com/startup/stan
-          get ih_home.html https://www.indiehackers.com/
-          get ih_newest.html https://www.indiehackers.com/newest
-          get ih_stories.html https://www.indiehackers.com/stories
-          get ih_feed.xml https://www.indiehackers.com/feed.xml
-          get devhunt_home.html https://devhunt.org/
-          get devhunt_news.html "https://devhunt.org/news/$(date -u +%F)"
-          get uneed_home.html https://www.uneed.best/
-          get uneed_llms.txt https://www.uneed.best/llms.txt
-          get microlaunch_home.html https://microlaunch.net/
-          get reddit_json.json 'https://www.reddit.com/r/LocalLLaMA/top.json?t=day&limit=5&raw_json=1' -H 'User-Agent: AmazingIndex/1.0 by /u/amazingindex'
-          get reddit_old.json 'https://old.reddit.com/r/LocalLLaMA/top.json?t=day&limit=5' -H 'User-Agent: AmazingIndex/1.0 by /u/amazingindex'
-          get reddit_rss.xml 'https://www.reddit.com/r/LocalLLaMA/top/.rss?t=day' -H 'User-Agent: AmazingIndex/1.0 by /u/amazingindex'
-          get ph_feed.xml https://www.producthunt.com/feed
-          if [ -n "$PRODUCTHUNT_TOKEN" ]; then
+          get uneed_openapi.json https://mcp.uneed.best/openapi.json
+          get uneed_recent.json 'https://mcp.uneed.best/v1/recent_launches'
+          get uneed_recent2.json 'https://mcp.uneed.best/v1/launches/recent'
+          get uneed_trending.json 'https://mcp.uneed.best/v1/trending'
+          get ml_p.html https://microlaunch.net/p/askwatch
+          get ml_root.html https://microlaunch.net/askwatch
+          get ml_h.html https://microlaunch.net/h/askwatch
+          get ih_fb_posts.json 'https://indie-hackers.firebaseio.com/posts.json?orderBy=%22$key%22&limitToLast=2'
+          get ih_fb_root.json 'https://indie-hackers.firebaseio.com/.json?shallow=true'
+          get ih_top_week.html "https://www.indiehackers.com/top/week-of-$(date -u +%G-%V)"
+          get ih_rsshub.xml 'https://rsshub.app/indiehackers/posts'
+          if false; then
             code=$(curl -s --max-time 30 -o out/ph_api.json -w '%{http_code}' https://api.producthunt.com/v2/api/graphql \
               -H "Authorization: Bearer $PRODUCTHUNT_TOKEN" -H 'Content-Type: application/json' \
               -d '{"query":"{ posts(first: 5, order: VOTES, postedAfter: \"'"$(date -u -d '2 days ago' +%FT00:00:00Z)"'\") { edges { node { name votesCount topics(first:5){edges{node{slug}}} } } } }"}')
