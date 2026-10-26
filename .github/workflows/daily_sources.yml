@@ -1,0 +1,98 @@
+name: Daily Sources
+
+# Sources that only octopus scrapes for the AI 日报 (新产品 / 独立开发 / Reddit).
+# Runs at 00:40 Beijing: scrape into Aliyun RDS raw_items, then the
+# aha_daily_handoff pipeline copies today's rows into ahaIndexSync's Supabase
+# raw_items + items_content, which ahaIndexSync's 02:00 run processes and ranks.
+#
+# One failed source does not block the others: every source is scraped, the
+# handoff still runs, and the job fails at the end so the failure is visible
+# (instead of a silent zero-item "success").
+#
+# Keep SOURCES in sync with octp_pipelines.aha_daily_handoff input.sources;
+# the handoff summary lists configured sources that produced no rows.
+
+on:
+  schedule:
+    - cron: "40 16 * * *" # UTC; 00:40 Asia/Shanghai
+  workflow_dispatch:
+    inputs:
+      write:
+        description: "Write to RDS and hand off to ahaIndexSync. Off = dry run: JSONL artifact only."
+        required: false
+        type: boolean
+        default: true
+
+concurrency:
+  group: daily-sources
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      TZ: Asia/Shanghai
+      SOURCES: product_hunt,show_hn,devhunt,uneed,microlaunch,trustmrr,reddit_r_localllama
+      WRITE: ${{ github.event_name == 'schedule' || inputs.write }}
+
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+      OCTOPUS_RDS_HOST: ${{ secrets.OCTOPUS_RDS_HOST }}
+      OCTOPUS_RDS_PORT: ${{ secrets.OCTOPUS_RDS_PORT }}
+      OCTOPUS_RDS_USER: ${{ secrets.OCTOPUS_RDS_USER }}
+      OCTOPUS_RDS_PASSWORD: ${{ secrets.OCTOPUS_RDS_PASSWORD }}
+      OCTOPUS_RDS_DATABASE: ${{ secrets.OCTOPUS_RDS_DATABASE }}
+      OCTOPUS_RDS_CHARSET: ${{ secrets.OCTOPUS_RDS_CHARSET }}
+      OCTOPUS_RDS_CONNECT_TIMEOUT: ${{ secrets.OCTOPUS_RDS_CONNECT_TIMEOUT }}
+      OCTOPUS_RDS_SSL_CA: ${{ secrets.OCTOPUS_RDS_SSL_CA }}
+
+      PRODUCTHUNT_TOKEN: ${{ secrets.PRODUCTHUNT_TOKEN }}
+      # Optional. Without them Reddit is read through RSS (its JSON refuses GitHub runner IPs).
+      REDDIT_CLIENT_ID: ${{ secrets.REDDIT_CLIENT_ID }}
+      REDDIT_CLIENT_SECRET: ${{ secrets.REDDIT_CLIENT_SECRET }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: python -m pip install .
+
+      - name: Scrape
+        id: scrape
+        continue-on-error: true
+        run: |
+          args=(--only "$SOURCES" --continue-on-error --fail-on-error --output outputs/daily_sources/raw_items.jsonl)
+          if [[ "$WRITE" == "true" ]]; then
+            args+=(--write-rds)
+          fi
+          set -o pipefail
+          python -m scripts.global_scrape "${args[@]}" | tee scrape.log
+          grep -E '^(scraper failed|scraper complete)' scrape.log | sed 's/^scraper failed/::warning::scraper failed/' || true
+
+      - name: Hand off to ahaIndexSync
+        if: env.WRITE == 'true'
+        run: python -m scripts.run_pipeline aha_daily_handoff
+
+      - name: Upload the collected rows
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-sources-raw-items
+          path: outputs/daily_sources/raw_items.jsonl
+          if-no-files-found: ignore
+          retention-days: 3
+
+      - name: Fail when a source failed
+        if: steps.scrape.outcome == 'failure'
+        run: |
+          echo "::error::At least one source failed; see the Scrape step (the others were still handed off)."
+          exit 1

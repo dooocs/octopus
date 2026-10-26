@@ -31,6 +31,8 @@ class RawItemSource(Protocol):
 
     def select_by_ids(self, ids: Sequence[str]) -> list[dict[str, Any]]: ...
 
+    def select_by_snapshot_date(self, sub_source_types: Sequence[str], snapshot_date: str) -> list[dict[str, Any]]: ...
+
 
 class Table(Protocol):
     def select(self, params: dict[str, str]) -> list[dict[str, Any]]: ...
@@ -97,6 +99,7 @@ def pipeline_kinds() -> list[str]:
 
 
 def _load_all() -> None:
+    import processing.aha_daily_handoff  # noqa: F401
     import processing.feed_digest  # noqa: F401
 
 

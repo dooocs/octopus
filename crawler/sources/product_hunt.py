@@ -11,6 +11,7 @@ from crawler.core.registry import register_adapter
 from infra.gateways.http_transport import http_post
 
 from .spec_helpers import INTEGER, STRING, default_input, input_schema
+from .web_helpers import SourceUnavailable
 
 PH_GRAPHQL_URL = "https://api.producthunt.com/v2/api/graphql"
 PT_OFFSET = timedelta(hours=-8)
@@ -160,7 +161,7 @@ class ProductHuntAdapter(SourceAdapterBase):
         input_schema_version=1,
         input_schema=input_schema(
             source={"api_token": STRING},
-            fetch={"max_retries": INTEGER},
+            fetch={"max_retries": INTEGER, "limit": INTEGER},
             filters={
                 "min_votes": INTEGER,
                 "topic_whitelist": {"type": "array", "items": STRING},
@@ -181,7 +182,7 @@ class ProductHuntAdapter(SourceAdapterBase):
     def discover(self, ctx: RunContext, config: ScraperConfig) -> list[SourceRecord]:
         api_token = self._api_token(config)
         if not api_token:
-            return []
+            raise SourceUnavailable("PRODUCTHUNT_TOKEN is not set (and input.source.api_token is empty)")
         max_retries = int(config.input.fetch.get("max_retries") or 3)
         headers = {"Authorization": f"Bearer {api_token}", "Content-Type": "application/json"}
 
@@ -191,7 +192,7 @@ class ProductHuntAdapter(SourceAdapterBase):
             body = {"query": GRAPHQL_QUERY, "variables": {"postedAfter": posted_after, "postedBefore": posted_before}}
             resp = _retry_post(PH_GRAPHQL_URL, body, headers, max_retries=max_retries)
             if resp.status_code != 200:
-                return []
+                raise SourceUnavailable(f"Product Hunt API returned HTTP {resp.status_code}: {resp.text[:200]}")
             data = resp.json()
             if data.get("errors") and not data.get("data", {}).get("posts"):
                 fallback_body = {
@@ -200,8 +201,10 @@ class ProductHuntAdapter(SourceAdapterBase):
                 }
                 resp = _retry_post(PH_GRAPHQL_URL, fallback_body, headers, max_retries=max_retries)
                 if resp.status_code != 200:
-                    return []
+                    raise SourceUnavailable(f"Product Hunt API returned HTTP {resp.status_code}: {resp.text[:200]}")
                 data = resp.json()
+                if data.get("errors") and not (data.get("data") or {}).get("posts"):
+                    raise SourceUnavailable(f"Product Hunt GraphQL errors: {str(data.get('errors'))[:300]}")
             edges = data.get("data", {}).get("posts", {}).get("edges", [])
             if edges and edges[0].get("node", {}).get("votesCount", 0) > 0:
                 break
@@ -271,6 +274,9 @@ class ProductHuntAdapter(SourceAdapterBase):
             if topic_whitelist and not any(slug in topic_whitelist for slug in topic_slugs):
                 continue
             pruned.append(record)
+        limit = int(config.input.fetch.get("limit") or 0)
+        if limit > 0:
+            pruned = sorted(pruned, key=lambda r: int(r.metrics.get("votes") or 0), reverse=True)[:limit]
         return pruned
 
     def enrich(self, ctx: RunContext, records: list[SourceRecord], config: ScraperConfig) -> list[SourceRecord]:

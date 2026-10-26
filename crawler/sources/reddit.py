@@ -14,10 +14,12 @@ from crawler.core.registry import register_adapter
 from infra.gateways.http_transport import http_get, http_post
 
 from .spec_helpers import BOOLEAN, INTEGER, STRING, default_input, input_schema
+from .web_helpers import SourceUnavailable
 
 REDDIT_TOP_URL = "https://www.reddit.com/r/{subreddit}/top.json"
 REDDIT_COMMENTS_URL = "https://www.reddit.com/comments/{post_id}.json"
 REDDIT_TOP_RSS_URL = "https://www.reddit.com/r/{subreddit}/top/.rss"
+REDDIT_COMMENTS_RSS_URL = "https://www.reddit.com/r/{subreddit}/comments/{post_id}/.rss"
 REDDIT_OAUTH_TOKEN_URL = "https://www.reddit.com/api/v1/access_token"
 REDDIT_OAUTH_TOP_URL = "https://oauth.reddit.com/r/{subreddit}/top"
 REDDIT_OAUTH_COMMENTS_URL = "https://oauth.reddit.com/comments/{post_id}"
@@ -43,6 +45,19 @@ def _retry_get(url: str, params: dict, headers: dict, max_retries: int = 3) -> r
 def _clean_text(text: str) -> str:
     text = html.unescape(text or "")
     text = re.sub(r"\s+", " ", text)
+    return text.strip()
+
+
+def _rss_html_to_text(value: str) -> str:
+    """Reddit RSS bodies are HTML: a preview table cell, the post's markdown div,
+    then a "submitted by /u/x [link] [comments]" footer."""
+    text = html.unescape(value or "")
+    text = re.sub(r"<!--.*?-->", " ", text, flags=re.S)
+    text = re.sub(r"</(p|li|h\d|tr)>|<br\s*/?>", "\n", text)
+    text = re.sub(r"<[^>]+>", " ", text)
+    text = re.sub(r"\s*submitted by\s+/u/\S+.*$", "", text, flags=re.S)
+    text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(r"\n\s*\n+", "\n", text)
     return text.strip()
 
 
@@ -155,7 +170,7 @@ class RedditAdapter(SourceAdapterBase):
                 "skip_discussion_below": INTEGER,
                 "skip_self_text_below": INTEGER,
             },
-            fetch={"max_retries": INTEGER, "post_limit": INTEGER, "max_comments_to_keep": INTEGER},
+            fetch={"max_retries": INTEGER, "post_limit": INTEGER, "max_comments_to_keep": INTEGER, "keep_top": INTEGER},
             enrich_names=["top_comments"],
         ),
         default_input=default_input(
@@ -171,8 +186,10 @@ class RedditAdapter(SourceAdapterBase):
             enrich=[{"name": "top_comments", "when": "always"}],
         ),
         supported_enrichers=["top_comments"],
-        required_secrets=["REDDIT_CLIENT_ID", "REDDIT_CLIENT_SECRET"],
-        description="抓取指定 subreddit 的高分讨论。",
+        description=(
+            "抓取指定 subreddit 过去 24 小时的高分讨论（t=day）。有 REDDIT_CLIENT_ID/SECRET 时走 OAuth，"
+            "否则走公开 JSON；JSON 被拒（GitHub Actions IP 常见 403）时退回 RSS。keep_top>0 时只保留最热的 N 条。"
+        ),
     )
 
     def discover(self, ctx: RunContext, config: ScraperConfig) -> list[SourceRecord]:
@@ -194,11 +211,15 @@ class RedditAdapter(SourceAdapterBase):
 
         try:
             resp = _retry_get(top_url, params={"t": "day", "limit": post_limit}, headers=headers, max_retries=max_retries)
-            if resp.status_code != 200:
-                return self._fetch_rss_fallback(subreddit, post_limit, {"User-Agent": USER_AGENT}, "rss_fallback")
-            posts = resp.json().get("data", {}).get("children", [])
-        except Exception:
-            return []
+            json_status = f"HTTP {resp.status_code}"
+            posts = resp.json().get("data", {}).get("children", []) if resp.status_code == 200 else None
+        except Exception as exc:
+            json_status = f"{exc.__class__.__name__}: {exc}"
+            posts = None
+        if posts is None:
+            return self._fetch_rss_fallback(
+                subreddit, max(post_limit, 10), {"User-Agent": USER_AGENT}, "rss_fallback", json_status=f"{api_mode} {json_status}"
+            )
 
         records: list[SourceRecord] = []
         for child in posts:
@@ -255,19 +276,25 @@ class RedditAdapter(SourceAdapterBase):
         pruned: list[SourceRecord] = []
         for record in records:
             score = int(record.metrics.get("score") or 0)
-            if score < min_score:
+            # RSS carries no score (it is already ordered by top); score filters only apply to JSON records.
+            has_score = record.extra.get("fallback") != "rss"
+            if has_score and score < min_score:
                 continue
             if skip_nsfw and record.extra.get("over_18"):
                 continue
             if skip_stickied and record.extra.get("stickied"):
                 continue
             flair = str(record.extra.get("flair") or "")
-            if flair == "Discussion" and score < skip_discussion_below:
+            if has_score and flair == "Discussion" and score < skip_discussion_below:
                 continue
             post_text = str(record.context_content.get("post_text") or "")
             if record.extra.get("is_self") and len(post_text) < skip_self_text_below:
                 continue
             pruned.append(record)
+        keep_top = int(config.input.fetch.get("keep_top") or 0)
+        if keep_top > 0:
+            # Stable sort: RSS records (all score 0) keep the feed's top order.
+            pruned = sorted(pruned, key=lambda r: int(r.metrics.get("score") or 0), reverse=True)[:keep_top]
         return pruned
 
     def enrich(self, ctx: RunContext, records: list[SourceRecord], config: ScraperConfig) -> list[SourceRecord]:
@@ -293,11 +320,53 @@ class RedditAdapter(SourceAdapterBase):
                 max_comments_to_keep,
                 comments_url_template=comments_url_template,
             )
+            via = comments_fetch_via
+            if status != "ok":
+                rss_comments, rss_status = self._fetch_rss_comments(
+                    str(record.extra.get("subreddit") or ""), str(post_id), max_comments_to_keep
+                )
+                if rss_status == "ok":
+                    top_comments, status, via = rss_comments, "ok", "rss"
+                else:
+                    status = f"{status}; rss {rss_status}"
             record.context_content["top_comments"] = top_comments
             record.context_content["top_comments_basis"] = "reddit_top_sort"
             record.context_content["comments_fetch_status"] = status
-            record.context_content["comments_fetch_via"] = comments_fetch_via
+            record.context_content["comments_fetch_via"] = via
         return records
+
+    def _fetch_rss_comments(self, subreddit: str, post_id: str, limit: int) -> tuple[list[dict], str]:
+        if not subreddit or not post_id or limit <= 0:
+            return [], "disabled"
+        try:
+            resp = http_get(
+                REDDIT_COMMENTS_RSS_URL.format(subreddit=subreddit, post_id=post_id),
+                params={"sort": "top", "limit": limit},
+                headers={"User-Agent": USER_AGENT, "Accept": "application/atom+xml"},
+                timeout=15,
+            )
+            if resp.status_code != 200:
+                return [], f"http_{resp.status_code}"
+            feed = feedparser.parse(resp.text)
+        except Exception as exc:
+            return [], f"error:{exc.__class__.__name__}"
+        comments = []
+        for entry in feed.entries[1:]:  # the first entry is the post itself
+            text = _rss_html_to_text(getattr(entry, "content", [{}])[0].get("value", "") if getattr(entry, "content", None) else getattr(entry, "summary", ""))
+            if not text:
+                continue
+            comments.append(
+                {
+                    "id": str(getattr(entry, "id", "") or ""),
+                    "author": str(getattr(entry, "author", "") or "").replace("/u/", ""),
+                    "text": text[:1000],
+                    "score": None,
+                    "created_at": getattr(entry, "updated", None),
+                }
+            )
+            if len(comments) >= limit:
+                break
+        return comments, "ok"
 
     def _fetch_rss_fallback(
         self,
@@ -305,6 +374,8 @@ class RedditAdapter(SourceAdapterBase):
         post_limit: int,
         headers: dict,
         discover_via: str,
+        *,
+        json_status: str = "",
     ) -> list[SourceRecord]:
         try:
             resp = http_get(
@@ -313,18 +384,21 @@ class RedditAdapter(SourceAdapterBase):
                 headers={**headers, "Accept": "application/atom+xml"},
                 timeout=15,
             )
-            if resp.status_code != 200:
-                return []
-            feed = feedparser.parse(resp.text)
-        except Exception:
-            return []
+            rss_status = f"HTTP {resp.status_code}"
+            feed = feedparser.parse(resp.text) if resp.status_code == 200 else None
+        except Exception as exc:
+            rss_status = f"{exc.__class__.__name__}: {exc}"
+            feed = None
+        if feed is None:
+            raise SourceUnavailable(f"r/{subreddit}: JSON refused ({json_status}) and RSS refused ({rss_status})")
         records: list[SourceRecord] = []
         for entry in feed.entries[:post_limit]:
             title = (getattr(entry, "title", "") or "").strip()
             url = (getattr(entry, "link", "") or "").strip()
             if not title or not url:
                 continue
-            summary = _clean_text(getattr(entry, "summary", "") or "")
+            raw_summary = getattr(entry, "content", [{}])[0].get("value", "") if getattr(entry, "content", None) else getattr(entry, "summary", "")
+            summary = _rss_html_to_text(raw_summary or "")
             score = _parse_rss_metric(r"([0-9,]+)\s+points?", summary)
             comments_count = _parse_rss_metric(r"([0-9,]+)\s+comments?", summary)
             post_id = _post_id_from_url(url)
