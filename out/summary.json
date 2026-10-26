@@ -1,0 +1,227 @@
+[
+ {
+  "source": "Show HN",
+  "discovered": 4,
+  "kept": 4,
+  "state": {},
+  "rows": [
+   {
+    "title": "Show HN: TitleArt – Make text like it's 1997",
+    "url": "https://titleart.dvy.io/",
+    "metrics": {
+     "score": 297,
+     "comments": 51
+    },
+    "content": "Show HN: TitleArt – Make text like it's 1997",
+    "comments": 0
+   },
+   {
+    "title": "Show HN: I put employees inside S&P 500 market-cap bubbles",
+    "url": "https://bigwhalehunting.com/workforce/",
+    "metrics": {
+     "score": 175,
+     "comments": 47
+    },
+    "content": "I was playing around with visualising the S&P 500 by market cap and decided to add employees to each company's bubble.\nWhat surprised me was how empty some of the biggest companies looked.\nNvidia is worth $5.2 trillion but employs only 42,000 people. That's around $124 million in market cap per empl",
+    "comments": 0
+   },
+   {
+    "title": "Show HN: Farol – A risk map of a pull request for the person who approves it",
+    "url": "https://github.com/winnin/farol",
+    "metrics": {
+     "score": 60,
+     "comments": 37
+    },
+    "content": "Show HN: Farol – A risk map of a pull request for the person who approves it",
+    "comments": 0
+   },
+   {
+    "title": "Show HN: Freehire, open-source search 3M+ tech jobs from company career boards",
+    "url": "https://freehire.me/",
+    "metrics": {
+     "score": 22,
+     "comments": 2
+    },
+    "content": "freehire is a filterable, job board aggregator, job tracker, and AI-assisted resume tailoring tool. Saving your skills and preferences changes which jobs appear and how your resume gets tailored. I've looked at a lot of these solutions over the years and found it really hard to find the right mix of",
+    "comments": 0
+   }
+  ]
+ },
+ {
+  "source": "DevHunt",
+  "discovered": 92,
+  "kept": 1,
+  "state": {
+   "recent": {
+    "devhunt:aiatlas": "2026-10-26"
+   }
+  },
+  "rows": [
+   {
+    "title": "AI-Atlas",
+    "url": "https://devhunt.org/tool/aiatlas",
+    "metrics": {
+     "votes": 62,
+     "views": 6184
+    },
+    "content": "Map your AI skills from your GitHub code",
+    "comments": 0
+   }
+  ]
+ },
+ {
+  "source": "Uneed",
+  "discovered": 10,
+  "kept": 2,
+  "state": {},
+  "rows": [
+   {
+    "title": "Fontsight",
+    "url": "https://www.uneed.best/tool/fontsight",
+    "metrics": {
+     "votes": 31,
+     "rank": 1
+    },
+    "content": "Identify fonts on any website instantly with this Chrome extension\n\nFontsight is a browser extension that lets you instantly identify typefaces on any webpage. Simply point at text to discover:\n The exact font being used\n Font creator/foundry information\n Ready-to-copy CSS code\n Perfect for designer",
+    "comments": 0
+   },
+   {
+    "title": "Referat: Private Meeting Notes",
+    "url": "https://www.uneed.best/tool/referat",
+    "metrics": {
+     "votes": 27,
+     "rank": 2
+    },
+    "content": "Record meetings, get the minutes: speakers, summary, action items. On-device.\n\nReferat records your meetings and writes the minutes. Tap record, and Referat writes down who said what, gives every speaker a name and makes a short summary with the decisions and action items. Audio never leaves your iP",
+    "comments": 0
+   }
+  ]
+ },
+ {
+  "source": "MicroLaunch",
+  "discovered": 89,
+  "kept": 1,
+  "state": {
+   "recent": {
+    "microlaunch:fastio": "2026-10-26"
+   }
+  },
+  "rows": [
+   {
+    "title": "Fastio",
+    "url": "https://microlaunch.net/p/fastio",
+    "metrics": {
+     "votes": 10,
+     "votes_week": 10,
+     "score_week": 22.2
+    },
+    "content": "Project workspaces for your team and AI agents\nFastio gives your team and AI agents a shared workspace for each project. Bring files and feedback together, ask agents to find answers or draft new work, and review it with your team. You choose each connection's access.",
+    "comments": 0
+   }
+  ]
+ },
+ {
+  "source": "TrustMRR",
+  "discovered": 453,
+  "kept": 1,
+  "state": {
+   "recent": {
+    "trustmrr:postiz": "2026-10-26"
+   }
+  },
+  "rows": [
+   {
+    "title": "Postiz: $316,480 MRR, +$101,680 (+47%) in 30 days",
+    "url": "https://trustmrr.com/startup/postiz",
+    "metrics": {
+     "mrr": 316480.5,
+     "mrr_growth_30d_pct": 47.34,
+     "mrr_prior_30d": 214800.83,
+     "mrr_added_30d": 101679.67,
+     "revenue_30d": 352730.2,
+     "total_revenue": 1582710.66,
+     "mrr_display": "$316,480",
+     "growth_display": "+$101,680 / 30 天"
+    },
+    "content": "Postiz is the ultimate agentic social media scheduler tool\nStripe 验证 MRR $316,480，30 天前约 $214,801，净增 $101,680（+47%）\n近 30 天收入 $352,730\n累计收入 $1,582,711\n创始人 Nevo David（X @wickedguro）",
+    "comments": 0
+   }
+  ]
+ },
+ {
+  "source": "Reddit r/LocalLLaMA",
+  "discovered": 10,
+  "kept": 1,
+  "state": {},
+  "rows": [
+   {
+    "title": "CrowdGPT - A collaboratively trained LLM.",
+    "url": "https://www.reddit.com/r/LocalLLaMA/comments/1xff9e4/crowdgpt_a_collaboratively_trained_llm/",
+    "metrics": {
+     "score": 0,
+     "comments": 0
+    },
+    "content": "Hello, I'm developing CrowdGPT , a project aiming to create an LLM without datacenters and without the usual millions of dollars spent by AI companies.\n The project aims to train a 1 billion parameter model collaboratively and openly, with a protocol where everyone gets a say in the direction the pr",
+    "comments": "http_403; rss error:RetryableHttpError"
+   }
+  ]
+ },
+ {
+  "source": "Product Hunt",
+  "discovered": 20,
+  "kept": 5,
+  "state": {},
+  "rows": [
+   {
+    "title": "Moli by Lexmount",
+    "url": "https://www.producthunt.com/products/lexmount-browser?utm_campaign=producthunt-api&utm_medium=api-v2&utm_source=Application%3A+https%3A%2F%2Fwww.producthunt.com%2Fv2%2Foauth%2Fapplications+%28ID%3A+284017%29",
+    "metrics": {
+     "votes": 285,
+     "comments": 68
+    },
+    "content": "The fastest headless browser for agents and harnesses · Moli by Lexmount is our browser engine built from scratch for AI agents. It starts faster and uses less memory than Chrome. Use Moli through Lexmount Browser, our cloud browser platform. Run multiple isolated browser sessions with proxy support",
+    "comments": 10
+   },
+   {
+    "title": "Badgey",
+    "url": "https://www.producthunt.com/products/badgey?utm_campaign=producthunt-api&utm_medium=api-v2&utm_source=Application%3A+https%3A%2F%2Fwww.producthunt.com%2Fv2%2Foauth%2Fapplications+%28ID%3A+284017%29",
+    "metrics": {
+     "votes": 216,
+     "comments": 8
+    },
+    "content": "Your iPhone becomes a name badge that faces the room · Badgey turns your iPhone into a name badge. On a lanyard, it turns to face the people you meet and swings as you move. In a chest pocket, it shrinks so your name shows above the edge. Several badges, a QR code for your link, five designs.",
+    "comments": 7
+   },
+   {
+    "title": "AgentGrid.io",
+    "url": "https://www.producthunt.com/products/agentgrid-io?utm_campaign=producthunt-api&utm_medium=api-v2&utm_source=Application%3A+https%3A%2F%2Fwww.producthunt.com%2Fv2%2Foauth%2Fapplications+%28ID%3A+284017%29",
+    "metrics": {
+     "votes": 197,
+     "comments": 8
+    },
+    "content": "Shared workspace for humans and agents · Built for Grok Bot, Muse AI, Instinct, Hermes, Claude, GPT, OpenClaw, Cursor, Codex, all agents are welcome. Work on the same live artifacts. Docs, reports, slides, apps, and designs, with shared context, controlled access, and full version history.",
+    "comments": 5
+   },
+   {
+    "title": "Openstatus Incident Management",
+    "url": "https://www.producthunt.com/products/openstatus-2?utm_campaign=producthunt-api&utm_medium=api-v2&utm_source=Application%3A+https%3A%2F%2Fwww.producthunt.com%2Fv2%2Foauth%2Fapplications+%28ID%3A+284017%29",
+    "metrics": {
+     "votes": 170,
+     "comments": 14
+    },
+    "content": "Incident management for small teams · Open source incident management next to your monitors and status page. Declare from Slack, get a channel per incident, keep a timeline and draft the postmortem.",
+    "comments": 5
+   },
+   {
+    "title": "git-flow-next",
+    "url": "https://www.producthunt.com/products/tower?utm_campaign=producthunt-api&utm_medium=api-v2&utm_source=Application%3A+https%3A%2F%2Fwww.producthunt.com%2Fv2%2Foauth%2Fapplications+%28ID%3A+284017%29",
+    "metrics": {
+     "votes": 134,
+     "comments": 2
+    },
+    "content": "Your favorite Git workflow. Reimagined. · A flexible, modern approach to the popular git-flow branching model. Download the CLI tool to get started with a better Git workflow: brew install git-flow-next",
+    "comments": 2
+   }
+  ]
+ }
+]
