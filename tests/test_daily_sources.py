@@ -245,6 +245,17 @@ class ProductHuntTest(unittest.TestCase):
                 run_config(cfg, "2026-10-27")
 
 
+class ProductHuntDayTest(unittest.TestCase):
+    def test_launch_day_follows_daylight_saving(self) -> None:
+        from crawler.sources.product_hunt import _pt_day_range
+        # 2026-10-27 00:40 Beijing = 2026-10-26 09:40 PDT: yesterday is Oct 25, a PDT day.
+        start, end = _pt_day_range(1, datetime(2026, 10, 26, 16, 40, tzinfo=timezone.utc))
+        self.assertEqual((start, end), ("2026-10-25T07:00:00+00:00", "2026-10-26T07:00:00+00:00"))
+        # After the switch back (Nov 1), a PST day starts at 08:00 UTC.
+        start, _ = _pt_day_range(1, datetime(2026, 11, 3, 16, 40, tzinfo=timezone.utc))
+        self.assertEqual(start, "2026-11-02T08:00:00+00:00")
+
+
 class _Table:
     def __init__(self, existing=None) -> None:
         self.existing = existing or []

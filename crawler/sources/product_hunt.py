@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import time
 from datetime import datetime, timezone, timedelta
+from zoneinfo import ZoneInfo
 
 import requests
 
@@ -14,7 +15,7 @@ from .spec_helpers import INTEGER, STRING, default_input, input_schema
 from .web_helpers import SourceUnavailable
 
 PH_GRAPHQL_URL = "https://api.producthunt.com/v2/api/graphql"
-PT_OFFSET = timedelta(hours=-8)
+PT_ZONE = ZoneInfo("America/Los_Angeles")
 
 DEFAULT_TOPIC_WHITELIST = [
     "artificial-intelligence",
@@ -106,13 +107,13 @@ def _retry_post(url: str, json_body: dict, headers: dict, max_retries: int = 3) 
     return response
 
 
-def _pt_day_range(days_ago: int) -> tuple[str, str]:
-    now_utc = datetime.now(timezone.utc)
-    now_pt = now_utc + PT_OFFSET
-    target_pt = (now_pt - timedelta(days=days_ago)).date()
-    start_pt = datetime(target_pt.year, target_pt.month, target_pt.day, tzinfo=timezone.utc) - PT_OFFSET
-    end_pt = start_pt + timedelta(days=1)
-    return start_pt.isoformat(), end_pt.isoformat()
+def _pt_day_range(days_ago: int, now: datetime | None = None) -> tuple[str, str]:
+    """UTC bounds of a Product Hunt launch day (a Los Angeles day, PST or PDT)."""
+    now_pt = (now or datetime.now(timezone.utc)).astimezone(PT_ZONE)
+    target = (now_pt - timedelta(days=days_ago)).date()
+    start = datetime(target.year, target.month, target.day, tzinfo=PT_ZONE)
+    end = datetime.combine(target + timedelta(days=1), datetime.min.time(), tzinfo=PT_ZONE)
+    return start.astimezone(timezone.utc).isoformat(), end.astimezone(timezone.utc).isoformat()
 
 
 def _comment_nodes(node: dict) -> list[dict]:

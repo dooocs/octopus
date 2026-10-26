@@ -34,9 +34,10 @@ insert into public.octp_scraper_configs (
    '{"source":{},"fetch":{"limit":1,"repeat_ttl_days":30},"filters":{"min_mrr":5000,"min_prior_mrr":1000,"skip_stealth":true},"enrich":[]}')
 on conflict (sub_source_type) do nothing;
 
--- Product Hunt: keep the 5 most-voted that pass the existing filters.
+-- Product Hunt: the 5 most-voted of the previous (complete) PT day that pass the
+-- topic filters. min_votes 200 -> 100: weekend days rarely reach 200.
 update public.octp_scraper_configs
-set input = jsonb_set(input, '{fetch,limit}', '5'), updated_date = now()
+set input = jsonb_set(jsonb_set(input, '{fetch,limit}', '5'), '{filters,min_votes}', '100'), updated_date = now()
 where sub_source_type = 'product_hunt' and archived_at is null;
 
 -- r/LocalLLaMA: the single hottest post of the last 24 hours. Score filters off,
