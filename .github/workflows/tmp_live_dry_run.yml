@@ -1,0 +1,59 @@
+name: TMP live dry run (delete me)
+on:
+  push:
+    branches: [tmp/source-probe-live]
+permissions:
+  contents: write
+jobs:
+  dry-run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      TZ: Asia/Shanghai
+      PRODUCTHUNT_TOKEN: ${{ secrets.PRODUCTHUNT_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12", cache: pip}
+      - run: python -m pip install -q .
+      - name: Run each adapter with the migration's configs (no DB, no RDS)
+        run: |
+          mkdir -p out
+          python - <<'PY'
+          import json, re, traceback
+          from datetime import date
+          from crawler.core.runner import run_config
+          sql = open("sql/016_daily_sources.sql").read()
+          configs = []
+          for m in re.finditer(r"\('([^']+)', '([a-z_]+)', true, \d+, '([A-Z]+)', '([a-z_]+)', '([a-z_]+)', 1,\s*'(\{.*?\})'\)", sql, re.S):
+              name, scraper, st, sub, it, inp = m.groups()
+              configs.append(dict(id=None, name=name, scraper=scraper, enabled=True, priority=1, source_type=st, sub_source_type=sub, item_type=it, input_schema_version=1, input=json.loads(inp)))
+          reddit = re.search(r"set input = '(\{\"source\":\{\"subreddit\".*?\})'", sql).group(1)
+          configs.append(dict(id=None, name="Reddit r/LocalLLaMA", scraper="reddit", enabled=True, priority=1, source_type="NEWS", sub_source_type="reddit_r_localllama", item_type="discussion", input_schema_version=1, input=json.loads(reddit)))
+          configs.append(dict(id=None, name="Product Hunt", scraper="product_hunt", enabled=True, priority=1, source_type="PRODUCT", sub_source_type="product_hunt", item_type="product", input_schema_version=1,
+              input={"fetch":{"max_retries":3,"limit":5},"enrich":[{"name":"product_comments","when":"always"}],"source":{},"filters":{"min_votes":100,"topic_blacklist":["crypto","web3","nft","blockchain","defi","dao","token"],"topic_whitelist":["artificial-intelligence","developer-tools","productivity","chatbots","no-code","open-source","machine-learning"]}}))
+          summary = []
+          with open("out/rows.jsonl", "w") as f:
+              for c in configs:
+                  try:
+                      r = run_config(c, date.today().isoformat())
+                      summary.append({"source": c["name"], "discovered": r.items_discovered, "kept": len(r.rows), "state": r.state,
+                                      "rows": [{"title": x["title"], "url": x["url"], "metrics": x["metrics"], "content": (x["content"] or "")[:300],
+                                                "comments": (x.get("context_content") or {}).get("comments_fetch_status") or len((x.get("context_content") or {}).get("top_comments") or [])} for x in r.rows]})
+                      for x in r.rows: f.write(json.dumps(x, ensure_ascii=False, default=str) + "\n")
+                  except Exception as e:
+                      summary.append({"source": c["name"], "error": f"{type(e).__name__}: {e}", "trace": traceback.format_exc()[-1500:]})
+          json.dump(summary, open("out/summary.json", "w"), ensure_ascii=False, indent=1, default=str)
+          for s in summary: print(s["source"], s.get("error") or f'kept={s["kept"]}/{s["discovered"]}')
+          from crawler.core.contracts import ScraperConfig, RunContext
+          from crawler.sources.product_hunt import ProductHuntAdapter
+          ph = ScraperConfig.from_mapping(configs[-1])
+          recs = ProductHuntAdapter().discover(RunContext(snapshot_date=date.today().isoformat()), ph)
+          json.dump([{"name": r.title, "votes": r.metrics.get("votes"), "topics": r.extra.get("topic_slugs"), "published": str(r.source_published_date)} for r in recs], open("out/ph_votes.json", "w"), indent=1)
+          PY
+      - name: Commit output
+        if: always()
+        run: |
+          git init -q pub && cd pub && git config user.email noreply@github.com && git config user.name probe
+          cp -r ../out . && git add out && git commit -qm live
+          git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" HEAD:refs/heads/tmp/source-probe-out
