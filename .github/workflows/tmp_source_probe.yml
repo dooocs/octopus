@@ -23,17 +23,10 @@ jobs:
           UA='Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36'
           get() { name=$1; url=$2; shift 2
             code=$(curl -sL --compressed --max-time 30 -A "$UA" "$@" -o "out/$name" -w '%{http_code}' "$url"); echo "$code $(wc -c < out/$name) $name $url" | tee -a out/status.txt; }
-          get uneed_openapi.json https://mcp.uneed.best/openapi.json
-          get uneed_recent.json 'https://mcp.uneed.best/v1/recent_launches'
-          get uneed_recent2.json 'https://mcp.uneed.best/v1/launches/recent'
-          get uneed_trending.json 'https://mcp.uneed.best/v1/trending'
-          get ml_p.html https://microlaunch.net/p/askwatch
-          get ml_root.html https://microlaunch.net/askwatch
-          get ml_h.html https://microlaunch.net/h/askwatch
-          get ih_fb_posts.json 'https://indie-hackers.firebaseio.com/posts.json?orderBy=%22$key%22&limitToLast=2'
-          get ih_fb_root.json 'https://indie-hackers.firebaseio.com/.json?shallow=true'
-          get ih_top_week.html "https://www.indiehackers.com/top/week-of-$(date -u +%G-%V)"
-          get ih_rsshub.xml 'https://rsshub.app/indiehackers/posts'
+          d=$(TZ=America/Los_Angeles date -d yesterday +%F)
+          get uneed_trending_daily.json "https://mcp.uneed.best/v1/trending?period=daily&date=$d&limit=10"
+          get uneed_launches.json 'https://mcp.uneed.best/v1/launches?limit=5'
+          get uneed_product.json 'https://mcp.uneed.best/v1/products/quartz-studio'
           if false; then
             code=$(curl -s --max-time 30 -o out/ph_api.json -w '%{http_code}' https://api.producthunt.com/v2/api/graphql \
               -H "Authorization: Bearer $PRODUCTHUNT_TOKEN" -H 'Content-Type: application/json' \
