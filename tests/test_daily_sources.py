@@ -196,6 +196,7 @@ REDDIT_RSS = """<?xml version="1.0" encoding="UTF-8"?>
 </feed>"""
 
 
+@patch("crawler.sources.reddit.RSS_PAUSE_SECONDS", 0)
 class RedditTest(unittest.TestCase):
     def _cfg(self) -> dict:
         return _config(

@@ -24,6 +24,7 @@ REDDIT_OAUTH_TOKEN_URL = "https://www.reddit.com/api/v1/access_token"
 REDDIT_OAUTH_TOP_URL = "https://oauth.reddit.com/r/{subreddit}/top"
 REDDIT_OAUTH_COMMENTS_URL = "https://oauth.reddit.com/comments/{post_id}"
 USER_AGENT = "AmazingIndex/1.0 by /u/amazingindex"
+RSS_PAUSE_SECONDS = 3
 
 
 def _retry_get(url: str, params: dict, headers: dict, max_retries: int = 3) -> requests.Response:
@@ -338,6 +339,7 @@ class RedditAdapter(SourceAdapterBase):
     def _fetch_rss_comments(self, subreddit: str, post_id: str, limit: int) -> tuple[list[dict], str]:
         if not subreddit or not post_id or limit <= 0:
             return [], "disabled"
+        time.sleep(RSS_PAUSE_SECONDS)  # back-to-back anonymous RSS requests get rate limited
         try:
             resp = http_get(
                 REDDIT_COMMENTS_RSS_URL.format(subreddit=subreddit, post_id=post_id),
