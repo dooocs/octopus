@@ -2,6 +2,8 @@ name: TMP source probe (delete me)
 on:
   push:
     branches: [tmp/source-probe]
+permissions:
+  contents: write
 jobs:
   probe:
     runs-on: ubuntu-latest
@@ -11,6 +13,7 @@ jobs:
       REDDIT_CLIENT_ID: ${{ secrets.REDDIT_CLIENT_ID }}
       REDDIT_CLIENT_SECRET: ${{ secrets.REDDIT_CLIENT_SECRET }}
     steps:
+      - uses: actions/checkout@v4
       - name: Probe
         run: |
           mkdir -p out
@@ -44,8 +47,9 @@ jobs:
               -d '{"query":"{ posts(first: 5, order: VOTES, postedAfter: \"'"$(date -u -d '2 days ago' +%FT00:00:00Z)"'\") { edges { node { name votesCount topics(first:5){edges{node{slug}}} } } } }"}')
             echo "$code ph_api" | tee -a out/status.txt
           fi
-      - uses: actions/upload-artifact@v4
-        with:
-          name: probe
-          path: out/
-          retention-days: 1
+      - name: Commit output to tmp/source-probe-out
+        run: |
+          git init -q pub && cd pub
+          git config user.email noreply@github.com && git config user.name probe
+          cp -r ../out . && git add out && git commit -qm probe
+          git push -q -f "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" HEAD:refs/heads/tmp/source-probe-out
