@@ -310,7 +310,8 @@ class HandoffTest(unittest.TestCase):
         self.assertEqual(row["original_url"], self.ROW["url"])
         self.assertEqual(row["source_name"], "Reddit r/LocalLLaMA")
         self.assertEqual(row["content_type"], "reddit")
-        self.assertEqual(row["scraper_slug"], "octopus:reddit_r_localllama")
+        self.assertEqual(row["scraper_slug"], "octopus")  # FK to ahaIndexSync scraper_configs.slug
+        self.assertEqual(row["extra"]["octopus"]["sub_source_type"], "reddit_r_localllama")
         self.assertEqual(row["extra"]["source_tag"], "reddit_r_localllama")
         self.assertEqual(row["published_at"], "2026-10-26T10:00:00+00:00")
         self.assertIn("Top comments:\n- x: Great", build_body(self.ROW))
@@ -333,6 +334,11 @@ class HandoffTest(unittest.TestCase):
         self.assertEqual(summary["handed_off"], 1)
         self.assertEqual(raw_table.upserts[0][0][0]["snapshot_date"], "2026-10-27")
         self.assertEqual(content_table.upserts[0][0][0]["item_id"], "abc")
+
+    def test_rerun_overwrites_its_own_rows(self) -> None:
+        summary, raw_table, _, _ = self._run([{"id": "abc", "scraper_slug": "octopus"}])
+        self.assertEqual(summary["handed_off"], 1)
+        self.assertEqual(len(raw_table.upserts[0][0]), 1)
 
     def test_rows_owned_by_ahaindexsync_are_left_alone(self) -> None:
         summary, raw_table, _, _ = self._run([{"id": "abc", "scraper_slug": "hackernews"}])
