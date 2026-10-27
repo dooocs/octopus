@@ -448,6 +448,86 @@
     "description": "抓取 V2EX 热门技术讨论。"
   },
   {
+    "scraper": "devhunt",
+    "label": "DevHunt",
+    "group": "Products",
+    "default_source_type": "PRODUCT",
+    "default_item_type": "product",
+    "input_schema_version": 1,
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "source",
+        "fetch",
+        "filters",
+        "enrich"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {}
+        },
+        "fetch": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "limit": {
+              "type": "integer"
+            },
+            "repeat_ttl_days": {
+              "type": "integer"
+            }
+          }
+        },
+        "filters": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "min_votes": {
+              "type": "integer"
+            }
+          }
+        },
+        "enrich": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "enum": []
+              },
+              "when": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true
+          }
+        }
+      }
+    },
+    "default_input": {
+      "source": {},
+      "fetch": {
+        "limit": 1,
+        "repeat_ttl_days": 7
+      },
+      "filters": {
+        "min_votes": 5
+      },
+      "enrich": []
+    },
+    "required_secrets": [],
+    "supported_enrichers": [],
+    "rate_limit": {},
+    "description": "DevHunt 本周 launch 榜（首页 Next.js 数据），按票数取尚未发过的 top N；同一工具 7 天内不重复。"
+  },
+  {
     "scraper": "github_releases",
     "label": "GitHub Releases",
     "group": "Code",
@@ -1238,6 +1318,86 @@
     "description": "抓取 Lobsters 热榜或指定 tag JSON，默认按 score/comment_count 取 top3。"
   },
   {
+    "scraper": "microlaunch",
+    "label": "MicroLaunch",
+    "group": "Products",
+    "default_source_type": "PRODUCT",
+    "default_item_type": "product",
+    "input_schema_version": 1,
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "source",
+        "fetch",
+        "filters",
+        "enrich"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {}
+        },
+        "fetch": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "limit": {
+              "type": "integer"
+            },
+            "repeat_ttl_days": {
+              "type": "integer"
+            }
+          }
+        },
+        "filters": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "min_score_week": {
+              "type": "number"
+            }
+          }
+        },
+        "enrich": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "enum": []
+              },
+              "when": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true
+          }
+        }
+      }
+    },
+    "default_input": {
+      "source": {},
+      "fetch": {
+        "limit": 1,
+        "repeat_ttl_days": 30
+      },
+      "filters": {
+        "min_score_week": 5
+      },
+      "enrich": []
+    },
+    "required_secrets": [],
+    "supported_enrichers": [],
+    "rate_limit": {},
+    "description": "MicroLaunch 当月批次的周榜（首页 Next.js 数据），按 score_week 取尚未发过的 top N；同一产品 30 天内不重复。"
+  },
+  {
     "scraper": "npm_package_releases",
     "label": "npm Package Releases",
     "group": "Package",
@@ -1525,6 +1685,9 @@
           "properties": {
             "max_retries": {
               "type": "integer"
+            },
+            "limit": {
+              "type": "integer"
             }
           }
         },
@@ -1750,6 +1913,9 @@
             },
             "max_comments_to_keep": {
               "type": "integer"
+            },
+            "keep_top": {
+              "type": "integer"
             }
           }
         },
@@ -1820,15 +1986,12 @@
         }
       ]
     },
-    "required_secrets": [
-      "REDDIT_CLIENT_ID",
-      "REDDIT_CLIENT_SECRET"
-    ],
+    "required_secrets": [],
     "supported_enrichers": [
       "top_comments"
     ],
     "rate_limit": {},
-    "description": "抓取指定 subreddit 的高分讨论。"
+    "description": "抓取指定 subreddit 过去 24 小时的高分讨论（t=day）。有 REDDIT_CLIENT_ID/SECRET 时走 OAuth，否则走公开 JSON；JSON 被拒（GitHub Actions IP 常见 403）时退回 RSS。keep_top>0 时只保留最热的 N 条。"
   },
   {
     "scraper": "rss",
@@ -1941,6 +2104,178 @@
     ],
     "rate_limit": {},
     "description": "抓取标准 RSS/Atom 订阅源。"
+  },
+  {
+    "scraper": "show_hn",
+    "label": "Show HN",
+    "group": "Products",
+    "default_source_type": "PRODUCT",
+    "default_item_type": "product",
+    "input_schema_version": 1,
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "source",
+        "fetch",
+        "filters",
+        "enrich"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {}
+        },
+        "fetch": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "window_hours": {
+              "type": "integer"
+            },
+            "hits_per_page": {
+              "type": "integer"
+            },
+            "limit": {
+              "type": "integer"
+            }
+          }
+        },
+        "filters": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "min_points": {
+              "type": "integer"
+            }
+          }
+        },
+        "enrich": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "enum": []
+              },
+              "when": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true
+          }
+        }
+      }
+    },
+    "default_input": {
+      "source": {},
+      "fetch": {
+        "window_hours": 24,
+        "hits_per_page": 100,
+        "limit": 5
+      },
+      "filters": {
+        "min_points": 20
+      },
+      "enrich": []
+    },
+    "required_secrets": [],
+    "supported_enrichers": [],
+    "rate_limit": {},
+    "description": "抓取过去 N 小时内发布的 Show HN 帖子（HN Algolia API），按 points 取 top N。"
+  },
+  {
+    "scraper": "trustmrr",
+    "label": "TrustMRR",
+    "group": "Indie",
+    "default_source_type": "STARTUP",
+    "default_item_type": "startup",
+    "input_schema_version": 1,
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "source",
+        "fetch",
+        "filters",
+        "enrich"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {}
+        },
+        "fetch": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "limit": {
+              "type": "integer"
+            },
+            "repeat_ttl_days": {
+              "type": "integer"
+            }
+          }
+        },
+        "filters": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "min_mrr": {
+              "type": "number"
+            },
+            "min_prior_mrr": {
+              "type": "number"
+            },
+            "skip_stealth": {
+              "type": "boolean"
+            }
+          }
+        },
+        "enrich": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "enum": []
+              },
+              "when": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true
+          }
+        }
+      }
+    },
+    "default_input": {
+      "source": {},
+      "fetch": {
+        "limit": 1,
+        "repeat_ttl_days": 30
+      },
+      "filters": {
+        "min_mrr": 5000,
+        "min_prior_mrr": 1000,
+        "skip_stealth": true
+      },
+      "enrich": []
+    },
+    "required_secrets": [],
+    "supported_enrichers": [],
+    "rate_limit": {},
+    "description": "TrustMRR 首页（Stripe 验证收入）里近 30 天 MRR 净增最多、且 30 天内没发过的 startup。按净增金额而不是百分比排序，min_prior_mrr 排除刚接入 Stripe 的（从 $2 到 $7k 不是增长）。"
   },
   {
     "scraper": "twitter_feed",
@@ -2135,5 +2470,94 @@
     "supported_enrichers": [],
     "rate_limit": {},
     "description": "抓取关注账号和关键词命中的推文。"
+  },
+  {
+    "scraper": "uneed",
+    "label": "Uneed",
+    "group": "Products",
+    "default_source_type": "PRODUCT",
+    "default_item_type": "product",
+    "input_schema_version": 1,
+    "input_schema": {
+      "type": "object",
+      "required": [
+        "source",
+        "fetch",
+        "filters",
+        "enrich"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {}
+        },
+        "fetch": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "day_offset": {
+              "type": "integer"
+            },
+            "limit": {
+              "type": "integer"
+            }
+          }
+        },
+        "filters": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "min_votes": {
+              "type": "integer"
+            }
+          }
+        },
+        "enrich": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "enum": [
+                  "product_details"
+                ]
+              },
+              "when": {
+                "type": "string"
+              }
+            },
+            "additionalProperties": true
+          }
+        }
+      }
+    },
+    "default_input": {
+      "source": {},
+      "fetch": {
+        "day_offset": 1,
+        "limit": 3
+      },
+      "filters": {
+        "min_votes": 0
+      },
+      "enrich": [
+        {
+          "name": "product_details",
+          "when": "always"
+        }
+      ]
+    },
+    "required_secrets": [],
+    "supported_enrichers": [
+      "product_details"
+    ],
+    "rate_limit": {},
+    "description": "Uneed 公开 REST API：某个洛杉矶日（默认昨天，已结束的一天）的每日投票榜 top N。"
   }
 ]

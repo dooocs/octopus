@@ -85,6 +85,18 @@ class RawItemsDao:
         params = [*sub_source_types, since.astimezone(timezone.utc).replace(tzinfo=None)]
         return [_decode_row(row) for row in self.db.execute_query(sql, params)]
 
+    def select_by_snapshot_date(self, sub_source_types: Sequence[str], snapshot_date: str) -> list[dict[str, Any]]:
+        """Rows of these sub source types written for one snapshot_date (YYYY-MM-DD)."""
+        if not sub_source_types:
+            return []
+        placeholders = ", ".join(["%s"] * len(sub_source_types))
+        sql = (
+            f"SELECT * FROM `{self.table_name}` "
+            f"WHERE `sub_source_type` IN ({placeholders}) AND `snapshot_date` = %s "
+            "ORDER BY `sub_source_type`, `id`"
+        )
+        return [_decode_row(row) for row in self.db.execute_query(sql, [*sub_source_types, snapshot_date])]
+
     def select_by_ids(self, ids: Sequence[str]) -> list[dict[str, Any]]:
         if not ids:
             return []

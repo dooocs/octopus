@@ -43,15 +43,20 @@ def _load_all() -> None:
     import crawler.sources.arxiv  # noqa: F401
     import crawler.sources.community_linuxdo  # noqa: F401
     import crawler.sources.community_v2ex  # noqa: F401
+    import crawler.sources.devhunt  # noqa: F401
     import crawler.sources.github  # noqa: F401
     import crawler.sources.github_releases  # noqa: F401
     import crawler.sources.hackernews  # noqa: F401
     import crawler.sources.huggingface  # noqa: F401
     import crawler.sources.lobsters  # noqa: F401
+    import crawler.sources.microlaunch  # noqa: F401
     import crawler.sources.openreview  # noqa: F401
     import crawler.sources.package_releases  # noqa: F401
     import crawler.sources.product_hunt  # noqa: F401
     import crawler.sources.reddit  # noqa: F401
     import crawler.sources.rss  # noqa: F401
+    import crawler.sources.show_hn  # noqa: F401
+    import crawler.sources.trustmrr  # noqa: F401
     import crawler.sources.twitter  # noqa: F401
     import crawler.sources.twitter_feed  # noqa: F401
+    import crawler.sources.uneed  # noqa: F401
