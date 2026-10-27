@@ -19,8 +19,13 @@ Config (octp_pipelines.input):
       }
     }
 
-Rows that ahaIndexSync's own scrapers already wrote (same id, a scraper_slug
-not owned by octopus) are left untouched.
+ahaIndexSync's raw_items.scraper_slug is NOT NULL with a foreign key to its
+scraper_configs.slug, so every handed-off row points at one disabled marker
+config, slug "octopus" (sql/017). ahaIndexSync only loads enabled configs, so it
+never runs it. Which octopus source a row came from is in extra.octopus.
+
+Rows that ahaIndexSync's own scrapers already wrote (same id, any other
+scraper_slug) are left untouched.
 """
 
 from __future__ import annotations
@@ -32,7 +37,7 @@ from zoneinfo import ZoneInfo
 from processing.core import Deps, PipelineConfig, PipelineIncomplete, register_pipeline
 
 KIND = "aha_daily_handoff"
-SLUG_PREFIX = "octopus:"
+SCRAPER_SLUG = "octopus"  # the disabled marker row in ahaIndexSync scraper_configs (sql/017)
 BODY_LIMIT = 12000
 
 
@@ -82,7 +87,7 @@ def to_sync_row(row: dict[str, Any], mapping: dict[str, Any], snapshot_date: str
         "extra": extra,
         "published_at": _iso(row.get("source_published_date")),
         "snapshot_date": snapshot_date,
-        "scraper_slug": f"{SLUG_PREFIX}{sub_source_type}",
+        "scraper_slug": SCRAPER_SLUG,
         "scraper_config_snapshot": dict(row.get("scrape_config_snapshot") or {}),
     }
 
@@ -112,7 +117,7 @@ def run_aha_daily_handoff(config: PipelineConfig, deps: Deps) -> dict[str, Any]:
     for chunk in _chunks(ids):
         for existing in raw_table.select({"id": f"in.({','.join(chunk)})", "select": "id,scraper_slug"}):
             slug = str(existing.get("scraper_slug") or "")
-            if not slug.startswith(SLUG_PREFIX):
+            if slug != SCRAPER_SLUG:
                 owned_elsewhere.add(str(existing["id"]))
 
     raw_rows: list[dict[str, Any]] = []
